@@ -1,0 +1,102 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Unit tests of the platform-independent core (queue, scan, storage, import, lyrics, ...).
+  core-tests:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate English and Russian strings
+        run: python3 Scripts/validate_localizations.py
+      - name: Validate project layout and release files
+        run: python3 Scripts/validate_project.py
+      - run: swift test
+
+  # Unsigned IPA for sideloading (Sideloadly / AltStore sign it with your Apple ID).
+  build-ipa:
+    needs: [core-tests]
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Version
+        run: |
+          VERSION=$(sed -n 's/.*MARKETING_VERSION: "\(.*\)"/\1/p' project.yml)
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then VERSION="${GITHUB_REF_NAME#v}"; fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      - run: brew install xcodegen
+      - run: xcodegen generate
+
+      - name: Build (no code signing)
+        shell: bash
+        run: |
+          set +e
+          xcodebuild \
+            -project PunPlayer.xcodeproj \
+            -scheme PunPlayer \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            MARKETING_VERSION="$VERSION" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build 2>&1 | tee build.log
+          build_status=${PIPESTATUS[0]}
+          set -e
+          if [[ "$build_status" -ne 0 ]]; then
+            echo "::group::Xcode compiler diagnostics (last 120 matching lines)"
+            grep -nE 'error:|fatal error:|SwiftCompile|SwiftEmitModule|BUILD FAILED|warning:' build.log | tail -n 120 || true
+            echo "::endgroup::"
+            exit "$build_status"
+          fi
+
+      - name: Package IPA
+        run: |
+          mkdir Payload
+          cp -R build/Build/Products/Release-iphoneos/PunPlayer.app Payload/
+          zip -qry "PunPlayer-$VERSION.ipa" Payload
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PunPlayer-ipa
+          path: PunPlayer-*.ipa
+
+      - name: Upload build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
+
+  # Tag "v0.0.5" -> GitHub Release with the IPA attached (only if tests and build are green).
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [core-tests, build-ipa]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: PunPlayer-ipa
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" PunPlayer-*.ipa \
+            --repo "$GITHUB_REPOSITORY" --title "PunPlayer ${GITHUB_REF_NAME#v}" --generate-notes \
+          || gh release upload "$GITHUB_REF_NAME" PunPlayer-*.ipa --repo "$GITHUB_REPOSITORY" --clobber

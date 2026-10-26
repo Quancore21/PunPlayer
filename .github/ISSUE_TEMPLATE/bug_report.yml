@@ -1,0 +1,66 @@
+name: Bug report
+description: Report a reproducible bug in PunPlayer.
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please search existing issues first. Do not attach private music files or signing credentials.
+  - type: input
+    id: version
+    attributes:
+      label: PunPlayer version
+      placeholder: 0.0.5 / commit hash
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Device and iOS version
+      placeholder: iPhone model, iOS version
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      options:
+        - Playback / controls
+        - Player layout
+        - Mini-player / navigation
+        - Library / scanning
+        - Import / export
+        - Playlists / queue
+        - Localization / theme
+        - Build / installation
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Numbered, minimal steps are best.
+      placeholder: "1. Open…\n2. Tap…\n3. Observe…"
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Screenshots or logs
+      description: Remove private information from screenshots and logs.
+    validations:
+      required: false

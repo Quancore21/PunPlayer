@@ -1,0 +1,26 @@
+# Xcode / SwiftPM
+.DS_Store
+*.xcodeproj
+*.xcworkspace
+xcuserdata/
+*.xcuserstate
+DerivedData/
+build/
+.build/
+.swiftpm/
+
+# Locally generated app packages and logs
+Payload/
+*.ipa
+build.log
+PunPlayer-Info.plist
+
+# Local-only credentials/configuration (never commit secrets)
+.env
+.env.*
+!.env.example
+*.mobileprovision
+*.p12
+*.cer
+*.privatekey
+secrets/

@@ -9,9 +9,18 @@ import SwiftUI
 struct AlbumTracklistSheet: View {
     let currentSong: Song
     let librarySongs: [Song]
+    var onClose: (() -> Void)? = nil
 
     @EnvironmentObject private var player: PlayerEngine
     @Environment(\.dismiss) private var dismiss
+
+    private func closeSheet() {
+        if let onClose {
+            onClose()
+        } else {
+            dismiss()
+        }
+    }
 
     private var albumSongs: [Song] {
         // Prefer an artist+album match to avoid same-title records, but do not collapse a
@@ -59,7 +68,7 @@ struct AlbumTracklistSheet: View {
                         Button {
                             // Rebuild playback around this album so next/previous stay in its tracklist.
                             player.play(songs: albumSongs, start: song, title: currentSong.album)
-                            dismiss()
+                            closeSheet()
                         } label: {
                             HStack(spacing: 11) {
                                 Text(song.trackNumber > 0 ? String(format: "%02d", song.trackNumber) : String(format: "%02d", index + 1))
@@ -81,7 +90,7 @@ struct AlbumTracklistSheet: View {
             .punScreen()
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") { dismiss() }
+                    Button("Done") { closeSheet() }
                 }
             }
         }

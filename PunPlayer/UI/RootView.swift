@@ -42,7 +42,8 @@ struct RootView: View {
                 }
             }
         }
-        .background(Pun.ink.ignoresSafeArea())
+        .background(AppBackground())
+        .animation(.easeInOut(duration: 0.28), value: showNowPlaying)
         .confirmationDialog("Saving is paused", isPresented: $showStorageDialog, titleVisibility: .visible) {
             Button("Try again") { pausedStores.forEach { $0.retryStorage() } }
             Button("Replace unreadable files", role: .destructive) {

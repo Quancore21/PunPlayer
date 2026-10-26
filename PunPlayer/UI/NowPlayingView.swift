@@ -23,12 +23,41 @@ struct NowPlayingView: View {
 
     @State private var showLyrics = false
     @State private var activeSheet: PlayerSheet?
+    @State private var showTracklistDrawer = false
+    @State private var drawerDragOffset: CGFloat = 0
+    @State private var isDraggingOpen = false
+
+    @State private var prevNudge: CGFloat = 0
+    @State private var prevScale: CGFloat = 1.0
+    @State private var nextNudge: CGFloat = 0
+    @State private var nextScale: CGFloat = 1.0
+
+    private func openTracklistDrawer(width: CGFloat? = nil) {
+        let actualWidth = width ?? min(UIScreen.main.bounds.width * 0.92, 420)
+        drawerDragOffset = actualWidth
+        isDraggingOpen = false
+        showTracklistDrawer = true
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.84)) {
+            drawerDragOffset = 0
+        }
+    }
+
+    private func dismissTracklistDrawer(width: CGFloat) {
+        withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
+            drawerDragOffset = width
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.29) {
+            showTracklistDrawer = false
+            isDraggingOpen = false
+            drawerDragOffset = 0
+        }
+    }
 
     var body: some View {
         GeometryReader { screen in
             ZStack {
                 if let song = player.currentSong {
-                    playerContent(song: song)
+                    playerContent(song: song, screen: screen.size)
                 } else {
                     emptyContent
                 }
@@ -36,6 +65,85 @@ struct NowPlayingView: View {
                 // Edge gesture overlays — transparent hit targets at screen edges.
                 // Placed outside interactive control zones so buttons always receive taps.
                 edgeGestureOverlays(size: screen.size)
+
+                // Trailing drawer for Album Tracklist (slides in smoothly from the RIGHT)
+                let drawerWidth = min(screen.size.width * 0.92, 420)
+                let isDrawerVisible = showTracklistDrawer || isDraggingOpen
+                let currentOffset: CGFloat = isDraggingOpen
+                    ? max(0, drawerWidth + drawerDragOffset)
+                    : max(0, drawerDragOffset)
+                let progress = max(0, min(1.0, 1.0 - Double(currentOffset / drawerWidth)))
+
+                if isDrawerVisible, let song = player.currentSong {
+                    Color.black.opacity(0.50 * progress)
+                        .ignoresSafeArea()
+                        .onTapGesture {
+                            dismissTracklistDrawer(width: drawerWidth)
+                        }
+
+                    HStack(spacing: 0) {
+                        Spacer()
+
+                        AlbumTracklistSheet(
+                            currentSong: song,
+                            librarySongs: library.songs,
+                            onClose: {
+                                dismissTracklistDrawer(width: drawerWidth)
+                            }
+                        )
+                        .frame(width: drawerWidth)
+                        .background(Pun.ink)
+                        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                                .stroke(Pun.separator.opacity(0.6), lineWidth: 0.75)
+                        }
+                        .shadow(color: .black.opacity(0.55 * progress), radius: 24, x: -6)
+                        .offset(x: currentOffset)
+                        .overlay(alignment: .leading) {
+                            // Invisible 36-pt leading edge drag hit-target: allows effortless swipe-to-dismiss
+                            // without carving out an awkward separate black column.
+                            Color.clear
+                                .frame(width: 36)
+                                .contentShape(Rectangle())
+                                .gesture(
+                                    DragGesture(minimumDistance: 4)
+                                        .onChanged { value in
+                                            if value.translation.width > 0 {
+                                                drawerDragOffset = value.translation.width
+                                            }
+                                        }
+                                        .onEnded { value in
+                                            if value.translation.width > 50 || value.predictedEndTranslation.width > 100 {
+                                                dismissTracklistDrawer(width: drawerWidth)
+                                            } else {
+                                                withAnimation(.spring(response: 0.26, dampingFraction: 0.84)) {
+                                                    drawerDragOffset = 0
+                                                }
+                                            }
+                                        }
+                                )
+                        }
+                        .simultaneousGesture(
+                            DragGesture(minimumDistance: 12)
+                                .onChanged { value in
+                                    if value.translation.width > 0 && abs(value.translation.width) > abs(value.translation.height) * 1.1 {
+                                        drawerDragOffset = value.translation.width
+                                    }
+                                }
+                                .onEnded { value in
+                                    if (value.translation.width > 60 || value.predictedEndTranslation.width > 120) && abs(value.translation.width) > abs(value.translation.height) * 1.1 {
+                                        dismissTracklistDrawer(width: drawerWidth)
+                                    } else {
+                                        withAnimation(.spring(response: 0.26, dampingFraction: 0.84)) {
+                                            drawerDragOffset = 0
+                                        }
+                                    }
+                                }
+                        )
+                    }
+                    .ignoresSafeArea(edges: .bottom)
+                }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             // Blurred cover is a background, never a sibling participating in layout.
@@ -47,7 +155,7 @@ struct NowPlayingView: View {
             .simultaneousGesture(
                 DragGesture(minimumDistance: 32)
                     .onEnded { value in
-                        guard activeSheet == nil else { return }
+                        guard activeSheet == nil, !showTracklistDrawer else { return }
                         if value.translation.height < -44 && abs(value.translation.height) > abs(value.translation.width) * 1.15 {
                             activeSheet = .actions
                         }
@@ -65,7 +173,12 @@ struct NowPlayingView: View {
                             isShuffleEnabled: player.isShuffleEnabled,
                             repeatMode: player.repeatMode,
                             showLyrics: showLyrics,
-                            onShowTracklist: { activeSheet = .tracklist },
+                            onShowTracklist: {
+                                activeSheet = nil
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                                    openTracklistDrawer()
+                                }
+                            },
                             onShowQueue: { activeSheet = .queue },
                             onToggleLyrics: {
                                 showLyrics.toggle()
@@ -99,22 +212,31 @@ struct NowPlayingView: View {
             .presentationDragIndicator(.visible)
         }
         .animation(.easeInOut(duration: 0.2), value: showLyrics)
+        
     }
 
     /// Transparent overlays at the right and bottom edges that capture edge swipe gestures.
     /// Sized so they NEVER overlap the playback transport buttons, allowing every tap to pass cleanly.
     /// The player content never scrolls, and artwork itself has no drag gesture.
     private func edgeGestureOverlays(size: CGSize) -> some View {
-        ZStack {
-            // Right edge → swipe left opens album tracklist
+        let drawerWidth = min(size.width * 0.92, 420)
+        return ZStack {
+            // Right edge → swipe left opens album tracklist with interactive dragging
             Color.clear
                 .frame(width: 44)
                 .frame(maxHeight: .infinity)
                 .contentShape(Rectangle())
                 .gesture(
-                    DragGesture(minimumDistance: 20, coordinateSpace: .local)
+                    DragGesture(minimumDistance: 10, coordinateSpace: .local)
+                        .onChanged { value in
+                            guard activeSheet == nil, !showTracklistDrawer else { return }
+                            if value.translation.width < 0 && abs(value.translation.width) > abs(value.translation.height) * 0.8 {
+                                isDraggingOpen = true
+                                drawerDragOffset = value.translation.width
+                            }
+                        }
                         .onEnded { value in
-                            guard activeSheet == nil else { return }
+                            guard activeSheet == nil, !showTracklistDrawer else { return }
                             let action = PlayerEdgeSwipeResolver.resolve(
                                 startX: Double(size.width - 44 + value.startLocation.x),
                                 startY: Double(value.startLocation.y),
@@ -123,7 +245,24 @@ struct NowPlayingView: View {
                                 width: Double(size.width),
                                 height: Double(size.height)
                             )
-                            if action == .albumTracklist { activeSheet = .tracklist }
+                            if action == .albumTracklist || value.translation.width < -40 || value.predictedEndTranslation.width < -80 {
+                                withAnimation(.spring(response: 0.30, dampingFraction: 0.84)) {
+                                    drawerDragOffset = -drawerWidth
+                                }
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.31) {
+                                    showTracklistDrawer = true
+                                    isDraggingOpen = false
+                                    drawerDragOffset = 0
+                                }
+                            } else {
+                                withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
+                                    drawerDragOffset = 0
+                                }
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.29) {
+                                    isDraggingOpen = false
+                                    drawerDragOffset = 0
+                                }
+                            }
                         }
                 )
                 .frame(maxWidth: .infinity, alignment: .trailing)
@@ -154,112 +293,84 @@ struct NowPlayingView: View {
         .allowsHitTesting(true)
     }
 
-    private func playerContent(song: Song) -> some View {
-        GeometryReader { geometry in
-            let compact = geometry.size.height < 700
-            let availableWidth = max(120, geometry.size.width - 56)
-            // Dynamically scale artwork so transport controls ALWAYS fit completely above the bottom edge.
-            let overhead: CGFloat = compact ? 310 : (settings.showGestureGuide ? 385 : 340)
-            let availableHeightForArt = max(100, geometry.size.height - overhead)
-            let artworkSide = min(compact ? 220 : 275, min(availableWidth, availableHeightForArt))
+    private func playerContent(song: Song, screen: CGSize) -> some View {
+        let compact = screen.height < 700
+        let availableWidth = max(120, screen.width - 44)
+        let availableHeight = screen.height
 
-            VStack(spacing: 0) {
-                header
-                    .frame(minHeight: 48)
+        // Non-artwork UI elements footprint:
+        // Header (~48) + Title (~68) + SeekBar (~56) + Transport (~84) + paddings (~20) = ~276pt
+        let controlsFootprint: CGFloat = compact ? 210 : 240
+        let headerFootprint: CGFloat = 52
+        let verticalMargins: CGFloat = 16
+        let availableForArt = max(90, availableHeight - controlsFootprint - headerFootprint - verticalMargins)
+        let maxAllowedArt = min(availableWidth, compact ? 190 : 275)
+        let artworkSide = max(90, min(maxAllowedArt, availableForArt))
 
-                if settings.showGestureGuide {
-                    playerGestureBanner
-                        .padding(.top, 2)
-                        .padding(.bottom, 4)
-                }
+        return VStack(spacing: 0) {
+            header
+                .frame(minHeight: 48)
+                .layoutPriority(1)
 
-                Spacer(minLength: 8)
-
-                if showLyrics {
-                    LyricsView(lyrics: player.lyrics, clock: player.clock)
-                        .frame(maxWidth: .infinity)
-                        .frame(maxHeight: .infinity)
-                        .padding(.horizontal, 2)
-                } else {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 30, style: .continuous)
-                            .fill(LinearGradient(
-                                colors: [Pun.surfaceRaised.opacity(0.72), Pun.ink.opacity(0.18)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ))
-                            .frame(width: artworkSide + 16, height: artworkSide + 16)
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 30, style: .continuous)
-                                    .stroke(Pun.separator.opacity(0.38), lineWidth: 0.75)
-                            }
-                        ArtworkView(key: song.artworkKey, seed: song.album, size: artworkSide, corner: 22)
-                            .id(song.id)
-                            .transition(.opacity.combined(with: .scale(scale: 0.975)))
-                            .animation(.easeInOut(duration: 0.28), value: song.id)
-                            .shadow(
-                                color: .black.opacity(colorScheme == .dark ? 0.26 : 0.10),
-                                radius: 16,
-                                y: 8
-                            )
-                    }
-                    .frame(maxWidth: .infinity)
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel(Text("Album artwork"))
-                    .accessibilityAction(named: Text("Show album tracks")) { activeSheet = .tracklist }
-                    .accessibilityAction(named: Text("Show player actions")) { activeSheet = .actions }
-                }
-
-                Spacer(minLength: 8)
-
-                titleBlock(song)
-                    .padding(.bottom, compact ? 10 : 16)
-
-                SeekBar(clock: player.clock, song: song) { player.seek(to: $0) }
-                    .padding(.bottom, compact ? 8 : 14)
-
-                transport
-                    .padding(.bottom, compact ? 6 : 12)
-            }
-            .padding(.horizontal, 22)
-            .padding(.top, 4)
-            .padding(.bottom, 12)
-            .frame(maxWidth: 520)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-    }
-
-    private var playerGestureBanner: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "hand.draw")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(Pun.mango)
-            Text("Swipe ← for tracks · Swipe ↑ for actions")
-                .font(Pun.caption().weight(.medium))
-                .foregroundStyle(Pun.textDim)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
             Spacer(minLength: 4)
-            Button {
-                withAnimation(.easeInOut(duration: 0.25)) {
-                    settings.showGestureGuide = false
+
+            if showLyrics {
+                LyricsView(lyrics: player.lyrics, clock: player.clock)
+                    .frame(maxWidth: .infinity)
+                    .frame(maxHeight: .infinity)
+                    .padding(.horizontal, 2)
+            } else {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .fill(LinearGradient(
+                            colors: [Pun.surfaceRaised.opacity(0.72), Pun.ink.opacity(0.18)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ))
+                        .frame(width: artworkSide + 10, height: artworkSide + 10)
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                                .stroke(Pun.separator.opacity(0.38), lineWidth: 0.75)
+                        }
+                    ArtworkView(key: song.artworkKey, seed: song.album, size: artworkSide, corner: 18)
+                        .id(song.id)
+                        .transition(.asymmetric(
+                            insertion: .scale(scale: 0.90).combined(with: .opacity),
+                            removal: .scale(scale: 1.08).combined(with: .opacity)
+                        ))
+                        .animation(.spring(response: 0.35, dampingFraction: 0.80), value: song.id)
+                        .shadow(
+                            color: .black.opacity(colorScheme == .dark ? 0.26 : 0.10),
+                            radius: 16,
+                            y: 8
+                        )
                 }
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(Pun.textDim)
-                    .frame(width: 22, height: 22)
-                    .background(Pun.surfaceRaised, in: Circle())
-                    .contentShape(Circle())
+                .frame(maxWidth: .infinity)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(Text("Album artwork"))
+                .accessibilityAction(named: Text("Show album tracks")) {
+                    openTracklistDrawer(width: min(screen.width * 0.92, 420))
+                }
+                .accessibilityAction(named: Text("Show player actions")) { activeSheet = .actions }
+                .accessibilityAction(named: Text("Player actions")) { activeSheet = .actions }
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(Text("Hide gesture guide"))
+
+            Spacer(minLength: 4)
+
+            // Anchored bottom section: Title, SeekBar, Transport
+            // Layout priority guarantees this block is given space first so controls NEVER clip off screen.
+            VStack(spacing: compact ? 6 : 10) {
+                titleBlock(song)
+                SeekBar(clock: player.clock, song: song) { player.seek(to: $0) }
+                transport
+            }
+            .layoutPriority(1)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(Pun.surfaceRaised.opacity(0.85), in: Capsule())
-        .overlay(Capsule().stroke(Pun.separator.opacity(0.6), lineWidth: 0.75))
-        .transition(.opacity.combined(with: .move(edge: .top)))
+        .padding(.horizontal, 22)
+        .padding(.top, 4)
+        .padding(.bottom, 8)
+        .frame(maxWidth: 520)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var emptyContent: some View {
@@ -283,12 +394,15 @@ struct NowPlayingView: View {
         GeometryReader { geometry in
             ZStack {
                 Pun.ink
+                if let tint = ArtworkStore.shared.tint(forKey: player.currentSong?.artworkKey).map({ Color(uiColor: $0) }) {
+                    tint.opacity(colorScheme == .dark ? 0.28 : 0.10)
+                }
                 if let key = player.currentSong?.artworkKey,
                    let image = ArtworkStore.shared.image(forKey: key, maxPixel: 260) {
                     Image(uiImage: image)
                         .resizable()
                         .scaledToFill()
-                        .frame(width: geometry.size.width, height: geometry.size.height)
+                        .frame(width: max(1, geometry.size.width), height: max(1, geometry.size.height))
                         .clipped()
                         .blur(radius: 72)
                         .opacity(colorScheme == .dark ? 0.32 : 0.12)
@@ -299,7 +413,7 @@ struct NowPlayingView: View {
                     endPoint: .bottom
                 )
             }
-            .frame(width: geometry.size.width, height: geometry.size.height)
+            .frame(width: max(1, geometry.size.width), height: max(1, geometry.size.height))
             .clipped()
         }
         .ignoresSafeArea()
@@ -343,54 +457,12 @@ struct NowPlayingView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.leading, 3)
-
-            if player.currentSong != nil {
-                Button { activeSheet = .tracklist } label: {
-                    Image(systemName: "list.bullet")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(Pun.text)
-                        .frame(width: 39, height: 39)
-                        .background(Pun.surface.opacity(0.86), in: Circle())
-                        .overlay(Circle().stroke(Pun.separator.opacity(0.8), lineWidth: 0.75))
-                        .contentShape(Circle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Show album tracks")
-
-                Button { activeSheet = .actions } label: {
-                    ViewThatFits(in: .horizontal) {
-                        HStack(spacing: 5) {
-                            Image(systemName: "ellipsis")
-                                .font(.system(size: 14, weight: .bold))
-                            Text("Player actions")
-                                .font(Pun.caption().weight(.semibold))
-                                .lineLimit(1)
-                        }
-                        .fixedSize(horizontal: true, vertical: false)
-                        .foregroundStyle(Pun.text)
-                        .padding(.horizontal, 10)
-                        .frame(height: 39)
-                        .background(Pun.surface.opacity(0.88), in: Capsule())
-                        .overlay(Capsule().stroke(Pun.separator.opacity(0.8), lineWidth: 0.75))
-
-                        Image(systemName: "ellipsis")
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(Pun.text)
-                            .frame(width: 39, height: 39)
-                            .background(Pun.surface.opacity(0.88), in: Circle())
-                            .overlay(Circle().stroke(Pun.separator.opacity(0.8), lineWidth: 0.75))
-                    }
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Player actions")
-            }
         }
         .frame(maxWidth: .infinity)
     }
 
     private func titleBlock(_ song: Song) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
+        VStack(alignment: .leading, spacing: 4) {
             Text(song.title)
                 .font(Pun.title(.title2))
                 .tracking(-0.35)
@@ -400,23 +472,48 @@ struct NowPlayingView: View {
                 .multilineTextAlignment(.leading)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .fixedSize(horizontal: false, vertical: true)
+                .id("title-\(song.id)")
+                .transition(.asymmetric(
+                    insertion: .opacity.combined(with: .offset(y: 4)),
+                    removal: .opacity.combined(with: .offset(y: -4))
+                ))
             Text(song.artist)
                 .font(Pun.body(.medium))
                 .foregroundStyle(Pun.mango)
                 .lineLimit(1)
                 .truncationMode(.tail)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .id("artist-\(song.id)")
+                .transition(.asymmetric(
+                    insertion: .opacity.combined(with: .offset(y: 4)),
+                    removal: .opacity.combined(with: .offset(y: -4))
+                ))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)
+        .animation(.easeInOut(duration: 0.22), value: song.id)
     }
 
     private var transport: some View {
         HStack(alignment: .center, spacing: 0) {
-            Button { player.previous() } label: {
+            Button {
+                withAnimation(.spring(response: 0.12, dampingFraction: 0.55)) {
+                    prevNudge = -6
+                    prevScale = 0.82
+                }
+                player.previous()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+                    withAnimation(.spring(response: 0.22, dampingFraction: 0.65)) {
+                        prevNudge = 0
+                        prevScale = 1.0
+                    }
+                }
+            } label: {
                 Image(systemName: "backward.end.fill")
                     .font(.system(size: 21, weight: .semibold))
                     .foregroundStyle(Pun.text)
+                    .scaleEffect(prevScale)
+                    .offset(x: prevNudge)
                     .frame(width: 52, height: 54)
                     .contentShape(Rectangle())
             }
@@ -432,10 +529,24 @@ struct NowPlayingView: View {
 
             Spacer(minLength: 24)
 
-            Button { player.next() } label: {
+            Button {
+                withAnimation(.spring(response: 0.12, dampingFraction: 0.55)) {
+                    nextNudge = 6
+                    nextScale = 0.82
+                }
+                player.next()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+                    withAnimation(.spring(response: 0.22, dampingFraction: 0.65)) {
+                        nextNudge = 0
+                        nextScale = 1.0
+                    }
+                }
+            } label: {
                 Image(systemName: "forward.end.fill")
                     .font(.system(size: 21, weight: .semibold))
                     .foregroundStyle(Pun.text)
+                    .scaleEffect(nextScale)
+                    .offset(x: nextNudge)
                     .frame(width: 52, height: 54)
                     .contentShape(Rectangle())
             }
@@ -467,7 +578,7 @@ private struct TrackActionsSheet: View {
                 HStack(spacing: 12) {
                     ArtworkView(key: song.artworkKey, seed: song.album, size: 52, corner: 10)
                     VStack(alignment: .leading, spacing: 3) {
-                        Text("Track actions")
+                        Text("Player actions")
                             .font(Pun.title(.title3))
                             .foregroundStyle(Pun.text)
                         Text(song.title)

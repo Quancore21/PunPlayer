@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.0.7
+
+- Permanently resolved player layout clipping: anchored bottom controls with layout priority and adaptive artwork scaling so transport controls and seekbar are guaranteed 100% visible on every iPhone model
+- Clean player header: removed redundant trailing buttons to keep the player clean and uncluttered; gesture hints remain exclusively on the Home screen
+- Album Tracklist Drawer: slides in smoothly from the right edge with a dedicated leading grab handle and interactive swipe-to-dismiss gesture to the right
+- Hardware-synced 60-120 FPS continuous 3D orbit Play/Pause animation using TimelineView, matching the authentic 5-frame orbital mark
+- Tactile spring micro-animations on previous and next track buttons with directional nudge
+- Smooth transitions for album artwork and track metadata on song change
+- Updated project licensing and documentation to credit author Quancore21 under GNU GPLv3
+
 ## 0.0.6
 
 - Fixed orbit Play/Pause animation: authentic 3D orbit where the satellite sweeps behind the central dark planet and returns in front

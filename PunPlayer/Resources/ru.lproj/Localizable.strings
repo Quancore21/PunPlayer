@@ -156,6 +156,9 @@
 "Shortcuts start at the screen edges" = "Жесты начинаются от краёв экрана";
 "Swipe in from the right edge to open album tracks" = "Свайпни от правого края, чтобы открыть треки альбома";
 "Swipe up from the bottom edge for track actions" = "Свайпни вверх от нижнего края для действий с треком";
+"Swipe ← from the right edge — album tracks" = "Свайп ← от правого края — треки альбома";
+"Swipe ↑ from the bottom — more actions" = "Свайп ↑ снизу — ещё действия";
+"Swipe ← for tracks · Swipe ↑ for actions" = "Свайп ← треки · Свайп ↑ действия";
 "Hide gesture guide" = "Скрыть подсказку о жестах";
 "Gesture guide hidden" = "Подсказка о жестах скрыта";
 "Undo" = "Вернуть";

@@ -2,9 +2,10 @@
 
 ## 0.0.6
 
-- Fixed orbit Play/Pause animation: amber circle now properly orbits the black circle like a satellite
-- Fixed player gestures: widened edge detection zones, eliminated content movement during swipes
-- Fixed play/pause button being clipped on compact screens
+- Fixed orbit Play/Pause animation: authentic 3D orbit where the satellite sweeps behind the central dark planet and returns in front
+- Fixed player gestures: widened swipe detection across the bottom control area to avoid iOS Home Indicator conflicts, eliminated content shifting
+- Fixed player layout clipping: removed outer scroll container and dynamically scaled artwork to guarantee transport controls are always completely visible
+- Added in-player gesture hint banner with instant dismiss toggle (persisted via Settings)
 - Cleaned up repository: removed verbose docs, streamlined README
 
 Notable changes for each version are listed here. Dates may be added when a release is published.

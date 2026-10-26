@@ -17,6 +17,7 @@ struct NowPlayingView: View {
     @EnvironmentObject private var player: PlayerEngine
     @EnvironmentObject private var library: LibraryStore
     @EnvironmentObject private var playlists: PlaylistStore
+    @EnvironmentObject private var settings: SettingsStore
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
 
@@ -32,9 +33,8 @@ struct NowPlayingView: View {
                     emptyContent
                 }
 
-                // Edge gesture overlays — transparent hit targets at the right and bottom
-                // edges. Using dedicated overlays instead of a DragGesture on the whole
-                // player prevents the ScrollView content from shifting during swipes.
+                // Edge gesture overlays — transparent hit targets at screen edges.
+                // Placed outside interactive control zones so buttons always receive taps.
                 edgeGestureOverlays(size: screen.size)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -42,6 +42,17 @@ struct NowPlayingView: View {
             .background { artworkBackground }
             .toolbar(.hidden, for: .navigationBar)
             .navigationBarBackButtonHidden()
+            // Ambient swipe-up gesture for the whole player: allows effortless pull-up of
+            // Track Actions from anywhere without fighting the iOS Home Indicator.
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 32)
+                    .onEnded { value in
+                        guard activeSheet == nil else { return }
+                        if value.translation.height < -44 && abs(value.translation.height) > abs(value.translation.width) * 1.15 {
+                            activeSheet = .actions
+                        }
+                    }
+            )
         }
         .sheet(item: $activeSheet) { sheet in
             Group {
@@ -90,9 +101,9 @@ struct NowPlayingView: View {
         .animation(.easeInOut(duration: 0.2), value: showLyrics)
     }
 
-    /// Transparent overlays at the right and bottom edges that capture drag gestures.
-    /// Taps pass through (minimumDistance: 30) and the main player content never receives
-    /// a drag, so the ScrollView stays perfectly still.
+    /// Transparent overlays at the right and bottom edges that capture edge swipe gestures.
+    /// Sized so they NEVER overlap the playback transport buttons, allowing every tap to pass cleanly.
+    /// The player content never scrolls, and artwork itself has no drag gesture.
     private func edgeGestureOverlays(size: CGSize) -> some View {
         ZStack {
             // Right edge → swipe left opens album tracklist
@@ -101,7 +112,7 @@ struct NowPlayingView: View {
                 .frame(maxHeight: .infinity)
                 .contentShape(Rectangle())
                 .gesture(
-                    DragGesture(minimumDistance: 30, coordinateSpace: .local)
+                    DragGesture(minimumDistance: 20, coordinateSpace: .local)
                         .onEnded { value in
                             guard activeSheet == nil else { return }
                             let action = PlayerEdgeSwipeResolver.resolve(
@@ -117,18 +128,19 @@ struct NowPlayingView: View {
                 )
                 .frame(maxWidth: .infinity, alignment: .trailing)
 
-            // Bottom edge → swipe up opens track actions
+            // Bottom edge strip → swipe up from the bottom edge margin opens track actions.
+            // Sized at 28pt so it lives strictly below the transport buttons and never blocks taps.
             Color.clear
-                .frame(height: 50)
+                .frame(height: 28)
                 .frame(maxWidth: .infinity)
                 .contentShape(Rectangle())
                 .gesture(
-                    DragGesture(minimumDistance: 30, coordinateSpace: .local)
+                    DragGesture(minimumDistance: 20, coordinateSpace: .local)
                         .onEnded { value in
                             guard activeSheet == nil else { return }
                             let action = PlayerEdgeSwipeResolver.resolve(
                                 startX: Double(value.startLocation.x),
-                                startY: Double(size.height - 50 + value.startLocation.y),
+                                startY: Double(size.height - 28 + value.startLocation.y),
                                 translationX: Double(value.translation.width),
                                 translationY: Double(value.translation.height),
                                 width: Double(size.width),
@@ -146,71 +158,108 @@ struct NowPlayingView: View {
         GeometryReader { geometry in
             let compact = geometry.size.height < 700
             let availableWidth = max(120, geometry.size.width - 56)
-            let heightLimitedSide = geometry.size.height * (compact ? 0.24 : 0.30)
-            let artworkSide = min(320, min(availableWidth, max(132, heightLimitedSide)))
+            // Dynamically scale artwork so transport controls ALWAYS fit completely above the bottom edge.
+            let overhead: CGFloat = compact ? 310 : (settings.showGestureGuide ? 385 : 340)
+            let availableHeightForArt = max(100, geometry.size.height - overhead)
+            let artworkSide = min(compact ? 220 : 275, min(availableWidth, availableHeightForArt))
 
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: 0) {
-                    header
-                        .frame(minHeight: 48)
+            VStack(spacing: 0) {
+                header
+                    .frame(minHeight: 48)
 
-                    Spacer(minLength: compact ? 10 : 24)
-
-                    if showLyrics {
-                        LyricsView(lyrics: player.lyrics, clock: player.clock)
-                            .frame(maxWidth: .infinity)
-                            .frame(minHeight: max(artworkSide, geometry.size.height * 0.27))
-                            .padding(.horizontal, 2)
-                    } else {
-                        ZStack {
-                            RoundedRectangle(cornerRadius: 32, style: .continuous)
-                                .fill(LinearGradient(
-                                    colors: [Pun.surfaceRaised.opacity(0.72), Pun.ink.opacity(0.18)],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ))
-                                .frame(width: artworkSide + 20, height: artworkSide + 20)
-                                .overlay {
-                                    RoundedRectangle(cornerRadius: 32, style: .continuous)
-                                        .stroke(Pun.separator.opacity(0.38), lineWidth: 0.75)
-                                }
-                            ArtworkView(key: song.artworkKey, seed: song.album, size: artworkSide, corner: 23)
-                                .id(song.id)
-                                .transition(.opacity.combined(with: .scale(scale: 0.975)))
-                                .animation(.easeInOut(duration: 0.28), value: song.id)
-                                .shadow(
-                                    color: .black.opacity(colorScheme == .dark ? 0.26 : 0.10),
-                                    radius: 18,
-                                    y: 9
-                                )
-                        }
-                        .frame(maxWidth: .infinity)
-                        .accessibilityElement(children: .ignore)
-                        .accessibilityLabel(Text("Album artwork"))
-                        .accessibilityAction(named: Text("Show album tracks")) { activeSheet = .tracklist }
-                        .accessibilityAction(named: Text("Show player actions")) { activeSheet = .actions }
-                    }
-
-                    Spacer(minLength: compact ? 14 : 26)
-
-                    titleBlock(song)
-                        .padding(.bottom, compact ? 16 : 22)
-
-                    SeekBar(clock: player.clock, song: song) { player.seek(to: $0) }
-                        .padding(.bottom, compact ? 12 : 20)
-
-                    transport
-                        .padding(.bottom, 10)
+                if settings.showGestureGuide {
+                    playerGestureBanner
+                        .padding(.top, 2)
+                        .padding(.bottom, 4)
                 }
-                .padding(.horizontal, 22)
-                .padding(.top, 5)
-                .padding(.bottom, 18)
-                .frame(maxWidth: 520)
-                .frame(maxWidth: .infinity)
-                .frame(minHeight: geometry.size.height)
+
+                Spacer(minLength: 8)
+
+                if showLyrics {
+                    LyricsView(lyrics: player.lyrics, clock: player.clock)
+                        .frame(maxWidth: .infinity)
+                        .frame(maxHeight: .infinity)
+                        .padding(.horizontal, 2)
+                } else {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 30, style: .continuous)
+                            .fill(LinearGradient(
+                                colors: [Pun.surfaceRaised.opacity(0.72), Pun.ink.opacity(0.18)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ))
+                            .frame(width: artworkSide + 16, height: artworkSide + 16)
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 30, style: .continuous)
+                                    .stroke(Pun.separator.opacity(0.38), lineWidth: 0.75)
+                            }
+                        ArtworkView(key: song.artworkKey, seed: song.album, size: artworkSide, corner: 22)
+                            .id(song.id)
+                            .transition(.opacity.combined(with: .scale(scale: 0.975)))
+                            .animation(.easeInOut(duration: 0.28), value: song.id)
+                            .shadow(
+                                color: .black.opacity(colorScheme == .dark ? 0.26 : 0.10),
+                                radius: 16,
+                                y: 8
+                            )
+                    }
+                    .frame(maxWidth: .infinity)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(Text("Album artwork"))
+                    .accessibilityAction(named: Text("Show album tracks")) { activeSheet = .tracklist }
+                    .accessibilityAction(named: Text("Show player actions")) { activeSheet = .actions }
+                }
+
+                Spacer(minLength: 8)
+
+                titleBlock(song)
+                    .padding(.bottom, compact ? 10 : 16)
+
+                SeekBar(clock: player.clock, song: song) { player.seek(to: $0) }
+                    .padding(.bottom, compact ? 8 : 14)
+
+                transport
+                    .padding(.bottom, compact ? 6 : 12)
             }
-            .frame(width: geometry.size.width, height: geometry.size.height)
+            .padding(.horizontal, 22)
+            .padding(.top, 4)
+            .padding(.bottom, 12)
+            .frame(maxWidth: 520)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+    }
+
+    private var playerGestureBanner: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "hand.draw")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(Pun.mango)
+            Text("Swipe ← for tracks · Swipe ↑ for actions")
+                .font(Pun.caption().weight(.medium))
+                .foregroundStyle(Pun.textDim)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+            Spacer(minLength: 4)
+            Button {
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    settings.showGestureGuide = false
+                }
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(Pun.textDim)
+                    .frame(width: 22, height: 22)
+                    .background(Pun.surfaceRaised, in: Circle())
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text("Hide gesture guide"))
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(Pun.surfaceRaised.opacity(0.85), in: Capsule())
+        .overlay(Capsule().stroke(Pun.separator.opacity(0.6), lineWidth: 0.75))
+        .transition(.opacity.combined(with: .move(edge: .top)))
     }
 
     private var emptyContent: some View {

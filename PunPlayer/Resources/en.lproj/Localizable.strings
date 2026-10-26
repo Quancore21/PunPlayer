@@ -156,6 +156,9 @@
 "Shortcuts start at the screen edges" = "Shortcuts start at the screen edges";
 "Swipe in from the right edge to open album tracks" = "Swipe in from the right edge to open album tracks";
 "Swipe up from the bottom edge for track actions" = "Swipe up from the bottom edge for track actions";
+"Swipe ← from the right edge — album tracks" = "Swipe ← from the right edge — album tracks";
+"Swipe ↑ from the bottom — more actions" = "Swipe ↑ from the bottom — more actions";
+"Swipe ← for tracks · Swipe ↑ for actions" = "Swipe ← for tracks · Swipe ↑ for actions";
 "Hide gesture guide" = "Hide gesture guide";
 "Gesture guide hidden" = "Gesture guide hidden";
 "Undo" = "Undo";

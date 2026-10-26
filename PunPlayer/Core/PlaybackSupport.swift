@@ -30,10 +30,10 @@ enum PlayerEdgeSwipeResolver {
         let startsAtRightEdge = startX >= width - 44
         let startsAtBottomEdge = startY >= height - 50
 
-        if startsAtRightEdge, translationX < -44, abs(translationX) > abs(translationY) * 1.1 {
+        if startsAtRightEdge, translationX < -40, abs(translationX) > abs(translationY) * 1.1 {
             return .albumTracklist
         }
-        if startsAtBottomEdge, translationY < -44, abs(translationY) > abs(translationX) * 1.1 {
+        if startsAtBottomEdge, translationY < -40, abs(translationY) > abs(translationX) * 1.1 {
             return .trackActions
         }
         return nil

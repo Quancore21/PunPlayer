@@ -145,6 +145,7 @@ struct NowPlayingView: View {
                     }
             )
         }
+        .ignoresSafeArea()
         .sheet(item: $activeSheet) { sheet in
             Group {
                 switch sheet {
@@ -340,10 +341,9 @@ struct NowPlayingView: View {
             .layoutPriority(1)
         }
         .padding(.horizontal, 22)
-        .padding(.top, 4)
-        .padding(.bottom, 8)
+        .padding(.top, metrics.isCompact ? 10 : 48)
+        .padding(.bottom, metrics.isCompact ? 12 : 36)
         .frame(maxWidth: 520)
-        .frame(height: metrics.availableContentHeight)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
@@ -359,15 +359,17 @@ struct NowPlayingView: View {
             Spacer(minLength: 8)
         }
         .padding(.horizontal, 22)
-        .padding(.vertical, 8)
+        .padding(.top, metrics.isCompact ? 10 : 48)
+        .padding(.bottom, metrics.isCompact ? 12 : 36)
         .frame(maxWidth: 520)
-        .frame(maxHeight: metrics.availableContentHeight)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var artworkBackground: some View {
         GeometryReader { geometry in
             let size = metrics.screenSize
+            let bgWidth = max(geometry.size.width, size.width)
+            let bgHeight = max(geometry.size.height, size.height)
             ZStack {
                 Pun.ink
                 if let tint = ArtworkStore.shared.tint(forKey: player.currentSong?.artworkKey).map({ Color(uiColor: $0) }) {
@@ -378,7 +380,7 @@ struct NowPlayingView: View {
                     Image(uiImage: image)
                         .resizable()
                         .scaledToFill()
-                        .frame(width: max(1, size.width), height: max(1, size.height))
+                        .frame(width: max(1, bgWidth), height: max(1, bgHeight))
                         .clipped()
                         .blur(radius: 72)
                         .opacity(colorScheme == .dark ? 0.32 : 0.12)
@@ -389,7 +391,7 @@ struct NowPlayingView: View {
                     endPoint: .bottom
                 )
             }
-            .frame(width: max(1, size.width), height: max(1, size.height))
+            .frame(width: max(1, bgWidth), height: max(1, bgHeight))
             .clipped()
         }
         .ignoresSafeArea()

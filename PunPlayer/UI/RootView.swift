@@ -15,22 +15,23 @@ struct RootView: View {
     @State private var showStorageDialog = false
 
     var body: some View {
-        // Keep the mini-player in normal layout flow instead of layering it over the
-        // NavigationStack. The stack physically gives up the space the player occupies,
-        // including in compact/landscape layouts, so rows can never sit beneath it.
-        VStack(spacing: 0) {
+        // Radical architectural measure: NavigationStack maintains 100% full-screen frame
+        // at all times so navigation transitions never resize the stack or stretch the player,
+        // eliminating black gaps and layout stretching simultaneously.
+        ZStack(alignment: .bottom) {
             NavigationStack {
                 HomeView()
                     .navigationDestination(isPresented: $showNowPlaying) {
                         NowPlayingView()
                             .toolbar(.hidden, for: .navigationBar)
                             .navigationBarBackButtonHidden()
+                            .ignoresSafeArea()
                     }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             if !showNowPlaying {
-                Group {
+                VStack(spacing: 0) {
                     if !pausedStores.isEmpty {
                         storageBanner
                     }
@@ -42,10 +43,10 @@ struct RootView: View {
                             .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
                 }
-                .animation(.easeInOut(duration: 0.28), value: showNowPlaying)
+                .animation(.easeInOut(duration: 0.25), value: showNowPlaying)
             }
         }
-        .background(AppBackground())
+        .background(AppBackground().ignoresSafeArea())
         .confirmationDialog("Saving is paused", isPresented: $showStorageDialog, titleVisibility: .visible) {
             Button("Try again") { pausedStores.forEach { $0.retryStorage() } }
             Button("Replace unreadable files", role: .destructive) {
@@ -164,7 +165,7 @@ private struct HomeView: View {
             }
             .padding(.horizontal, 20)
             .padding(.top, 12)
-            .padding(.bottom, 22)
+            .padding(.bottom, player.currentSong != nil ? 88 : 22)
             .frame(maxWidth: 620)
             .frame(maxWidth: .infinity)
         }

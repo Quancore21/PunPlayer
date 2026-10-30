@@ -30,20 +30,22 @@ struct RootView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             if !showNowPlaying {
-                if !pausedStores.isEmpty {
-                    storageBanner
+                Group {
+                    if !pausedStores.isEmpty {
+                        storageBanner
+                    }
+                    if player.currentSong != nil {
+                        MiniPlayer { showNowPlaying = true }
+                            .padding(.horizontal, 12)
+                            .padding(.top, 6)
+                            .padding(.bottom, 5)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
                 }
-                if player.currentSong != nil {
-                    MiniPlayer { showNowPlaying = true }
-                        .padding(.horizontal, 12)
-                        .padding(.top, 6)
-                        .padding(.bottom, 5)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                }
+                .animation(.easeInOut(duration: 0.28), value: showNowPlaying)
             }
         }
         .background(AppBackground())
-        .animation(.easeInOut(duration: 0.28), value: showNowPlaying)
         .confirmationDialog("Saving is paused", isPresented: $showStorageDialog, titleVisibility: .visible) {
             Button("Try again") { pausedStores.forEach { $0.retryStorage() } }
             Button("Replace unreadable files", role: .destructive) {

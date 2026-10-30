@@ -181,3 +181,5 @@
 "Swipe up" = "Свайп вверх";
 "Swipe right for album tracks, or swipe up for player actions." = "Свайп вправо — треклист альбома, свайп вверх — действия плеера.";
 "Tap to toggle playback." = "Нажмите, чтобы переключить воспроизведение.";
+"Queue is empty" = "Очередь пуста";
+"Play a song or album from your library to populate the queue." = "Воспроизведите трек или альбом из медиатеки, чтобы заполнить очередь.";

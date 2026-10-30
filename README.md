@@ -105,7 +105,7 @@ PunPlayer/
 ## 📲 Installation
 
 ### Option 1: Sideloading (Recommended)
-1. Download the latest `PunPlayer-0.0.7.ipa` from [GitHub Releases](https://github.com/Quancore21/PunPlayer/releases).
+1. Download the latest `PunPlayer-0.0.8.ipa` from [GitHub Releases](https://github.com/Quancore21/PunPlayer/releases).
 2. Sideload it using [AltStore](https://altstore.io/), [Sideloadly](https://sideloadly.io/), or [TrollStore](https://github.com/opa334/TrollStore).
 3. Sign in with your Apple ID when prompted to generate a free personal provisioning profile.
 

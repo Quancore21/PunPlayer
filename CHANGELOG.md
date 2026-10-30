@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.0.8
+
+- ScreenMetrics caching: device metrics and optimal player layout dimensions are now precomputed and cached on launch, eliminating real-time player stretching/resizing during navigation transitions
+- Fixed drawer leading tap hit-testing: song row touches near the leading edge are no longer blocked by separate hit-testing layers
+- Fixed ambient swipe-up gesture: ambient swipe up for track actions is cleanly disabled while reading synchronized lyrics, preventing accidental panel presentation during scrolling
+- Animated drawer tokening: rapid toggling of the album drawer can no longer trigger stale dismissal timers
+- QueueView Empty State: added a localized empty state illustration and message when the queue has no items
+- Seamless full-bleed artwork background: background dimensions are stabilized from the initial push frame, preventing background flash or redraw jitter
+
 ## 0.0.7
 
 - Permanently resolved player layout clipping: anchored bottom controls with layout priority and adaptive artwork scaling so transport controls and seekbar are guaranteed 100% visible on every iPhone model

@@ -181,3 +181,5 @@
 "Swipe up" = "Swipe up";
 "Swipe right for album tracks, or swipe up for player actions." = "Swipe right for album tracks, or swipe up for player actions.";
 "Tap to toggle playback." = "Tap to toggle playback.";
+"Queue is empty" = "Queue is empty";
+"Play a song or album from your library to populate the queue." = "Play a song or album from your library to populate the queue.";

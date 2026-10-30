@@ -21,11 +21,13 @@ struct NowPlayingView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
 
+    private let metrics = ScreenMetrics.shared
     @State private var showLyrics = false
     @State private var activeSheet: PlayerSheet?
     @State private var showTracklistDrawer = false
     @State private var drawerDragOffset: CGFloat = 0
     @State private var isDraggingOpen = false
+    @State private var drawerAnimationToken: Int = 0
 
     @State private var prevNudge: CGFloat = 0
     @State private var prevScale: CGFloat = 1.0
@@ -33,7 +35,8 @@ struct NowPlayingView: View {
     @State private var nextScale: CGFloat = 1.0
 
     private func openTracklistDrawer(width: CGFloat? = nil) {
-        let actualWidth = width ?? min(UIScreen.main.bounds.width * 0.92, 420)
+        drawerAnimationToken += 1
+        let actualWidth = width ?? metrics.drawerWidth
         drawerDragOffset = actualWidth
         isDraggingOpen = false
         showTracklistDrawer = true
@@ -42,11 +45,15 @@ struct NowPlayingView: View {
         }
     }
 
-    private func dismissTracklistDrawer(width: CGFloat) {
+    private func dismissTracklistDrawer(width: CGFloat? = nil) {
+        drawerAnimationToken += 1
+        let currentToken = drawerAnimationToken
+        let actualWidth = width ?? metrics.drawerWidth
         withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
-            drawerDragOffset = width
+            drawerDragOffset = actualWidth
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.29) {
+            guard self.drawerAnimationToken == currentToken else { return }
             showTracklistDrawer = false
             isDraggingOpen = false
             drawerDragOffset = 0
@@ -55,24 +62,24 @@ struct NowPlayingView: View {
 
     var body: some View {
         GeometryReader { screen in
+            let stableSize = metrics.screenSize
+            let drawerWidth = metrics.drawerWidth
+            let isDrawerVisible = showTracklistDrawer || isDraggingOpen
+            let currentOffset: CGFloat = isDraggingOpen
+                ? max(0, drawerWidth + drawerDragOffset)
+                : max(0, drawerDragOffset)
+            let progress = max(0, min(1.0, 1.0 - Double(currentOffset / drawerWidth)))
+
             ZStack {
                 if let song = player.currentSong {
-                    playerContent(song: song, screen: screen.size)
+                    playerContent(song: song, screen: stableSize)
                 } else {
                     emptyContent
                 }
 
                 // Edge gesture overlays — transparent hit targets at screen edges.
                 // Placed outside interactive control zones so buttons always receive taps.
-                edgeGestureOverlays(size: screen.size)
-
-                // Trailing drawer for Album Tracklist (slides in smoothly from the RIGHT)
-                let drawerWidth = min(screen.size.width * 0.92, 420)
-                let isDrawerVisible = showTracklistDrawer || isDraggingOpen
-                let currentOffset: CGFloat = isDraggingOpen
-                    ? max(0, drawerWidth + drawerDragOffset)
-                    : max(0, drawerDragOffset)
-                let progress = max(0, min(1.0, 1.0 - Double(currentOffset / drawerWidth)))
+                edgeGestureOverlays(size: stableSize)
 
                 if isDrawerVisible, let song = player.currentSong {
                     Color.black.opacity(0.50 * progress)
@@ -100,39 +107,15 @@ struct NowPlayingView: View {
                         }
                         .shadow(color: .black.opacity(0.55 * progress), radius: 24, x: -6)
                         .offset(x: currentOffset)
-                        .overlay(alignment: .leading) {
-                            // Invisible 36-pt leading edge drag hit-target: allows effortless swipe-to-dismiss
-                            // without carving out an awkward separate black column.
-                            Color.clear
-                                .frame(width: 36)
-                                .contentShape(Rectangle())
-                                .gesture(
-                                    DragGesture(minimumDistance: 4)
-                                        .onChanged { value in
-                                            if value.translation.width > 0 {
-                                                drawerDragOffset = value.translation.width
-                                            }
-                                        }
-                                        .onEnded { value in
-                                            if value.translation.width > 50 || value.predictedEndTranslation.width > 100 {
-                                                dismissTracklistDrawer(width: drawerWidth)
-                                            } else {
-                                                withAnimation(.spring(response: 0.26, dampingFraction: 0.84)) {
-                                                    drawerDragOffset = 0
-                                                }
-                                            }
-                                        }
-                                )
-                        }
                         .simultaneousGesture(
-                            DragGesture(minimumDistance: 12)
+                            DragGesture(minimumDistance: 10)
                                 .onChanged { value in
-                                    if value.translation.width > 0 && abs(value.translation.width) > abs(value.translation.height) * 1.1 {
+                                    if value.translation.width > 0 && abs(value.translation.width) > abs(value.translation.height) * 1.05 {
                                         drawerDragOffset = value.translation.width
                                     }
                                 }
                                 .onEnded { value in
-                                    if (value.translation.width > 60 || value.predictedEndTranslation.width > 120) && abs(value.translation.width) > abs(value.translation.height) * 1.1 {
+                                    if (value.translation.width > 50 || value.predictedEndTranslation.width > 100) && abs(value.translation.width) > abs(value.translation.height) * 1.05 {
                                         dismissTracklistDrawer(width: drawerWidth)
                                     } else {
                                         withAnimation(.spring(response: 0.26, dampingFraction: 0.84)) {
@@ -155,7 +138,7 @@ struct NowPlayingView: View {
             .simultaneousGesture(
                 DragGesture(minimumDistance: 32)
                     .onEnded { value in
-                        guard activeSheet == nil, !showTracklistDrawer else { return }
+                        guard activeSheet == nil, !showTracklistDrawer, !showLyrics else { return }
                         if value.translation.height < -44 && abs(value.translation.height) > abs(value.translation.width) * 1.15 {
                             activeSheet = .actions
                         }
@@ -294,18 +277,8 @@ struct NowPlayingView: View {
     }
 
     private func playerContent(song: Song, screen: CGSize) -> some View {
-        let compact = screen.height < 700
-        let availableWidth = max(120, screen.width - 44)
-        let availableHeight = screen.height
-
-        // Non-artwork UI elements footprint:
-        // Header (~48) + Title (~68) + SeekBar (~56) + Transport (~84) + paddings (~20) = ~276pt
-        let controlsFootprint: CGFloat = compact ? 210 : 240
-        let headerFootprint: CGFloat = 52
-        let verticalMargins: CGFloat = 16
-        let availableForArt = max(90, availableHeight - controlsFootprint - headerFootprint - verticalMargins)
-        let maxAllowedArt = min(availableWidth, compact ? 190 : 275)
-        let artworkSide = max(90, min(maxAllowedArt, availableForArt))
+        let compact = metrics.isCompact
+        let artworkSide = metrics.artworkSide
 
         return VStack(spacing: 0) {
             header
@@ -349,7 +322,7 @@ struct NowPlayingView: View {
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(Text("Album artwork"))
                 .accessibilityAction(named: Text("Show album tracks")) {
-                    openTracklistDrawer(width: min(screen.width * 0.92, 420))
+                    openTracklistDrawer(width: metrics.drawerWidth)
                 }
                 .accessibilityAction(named: Text("Show player actions")) { activeSheet = .actions }
                 .accessibilityAction(named: Text("Player actions")) { activeSheet = .actions }
@@ -370,6 +343,7 @@ struct NowPlayingView: View {
         .padding(.top, 4)
         .padding(.bottom, 8)
         .frame(maxWidth: 520)
+        .frame(height: metrics.availableContentHeight)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
@@ -386,12 +360,14 @@ struct NowPlayingView: View {
         }
         .padding(.horizontal, 22)
         .padding(.vertical, 8)
-        .frame(maxWidth: 520, maxHeight: .infinity)
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: 520)
+        .frame(maxHeight: metrics.availableContentHeight)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var artworkBackground: some View {
         GeometryReader { geometry in
+            let size = metrics.screenSize
             ZStack {
                 Pun.ink
                 if let tint = ArtworkStore.shared.tint(forKey: player.currentSong?.artworkKey).map({ Color(uiColor: $0) }) {
@@ -402,7 +378,7 @@ struct NowPlayingView: View {
                     Image(uiImage: image)
                         .resizable()
                         .scaledToFill()
-                        .frame(width: max(1, geometry.size.width), height: max(1, geometry.size.height))
+                        .frame(width: max(1, size.width), height: max(1, size.height))
                         .clipped()
                         .blur(radius: 72)
                         .opacity(colorScheme == .dark ? 0.32 : 0.12)
@@ -413,7 +389,7 @@ struct NowPlayingView: View {
                     endPoint: .bottom
                 )
             }
-            .frame(width: max(1, geometry.size.width), height: max(1, geometry.size.height))
+            .frame(width: max(1, size.width), height: max(1, size.height))
             .clipped()
         }
         .ignoresSafeArea()
@@ -840,27 +816,37 @@ struct QueueView: View {
 
     var body: some View {
         NavigationStack {
-            List {
-                ForEach(player.queueSongs) { song in
-                    Button {
-                        player.play(id: song.id)
-                    } label: {
-                        SongRow(song: song, isCurrent: player.currentSong?.id == song.id)
+            Group {
+                if player.queueSongs.isEmpty {
+                    EmptyState(
+                        symbol: "music.note.list",
+                        title: "Queue is empty",
+                        message: "Play a song or album from your library to populate the queue."
+                    )
+                } else {
+                    List {
+                        ForEach(player.queueSongs) { song in
+                            Button {
+                                player.play(id: song.id)
+                            } label: {
+                                SongRow(song: song, isCurrent: player.currentSong?.id == song.id)
+                            }
+                            .buttonStyle(.plain)
+                            .listRowBackground(Color.clear)
+                        }
+                        .onMove { source, destination in
+                            var ids = player.queueSongs.map(\.id)
+                            ids.move(fromOffsets: source, toOffset: destination)
+                            player.setQueueOrder(ids)
+                        }
+                        .onDelete { offsets in
+                            player.removeFromQueue(at: offsets)
+                        }
                     }
-                    .buttonStyle(.plain)
-                    .listRowBackground(Color.clear)
-                }
-                .onMove { source, destination in
-                    var ids = player.queueSongs.map(\.id)
-                    ids.move(fromOffsets: source, toOffset: destination)
-                    player.setQueueOrder(ids)
-                }
-                .onDelete { offsets in
-                    player.removeFromQueue(at: offsets)
+                    .listStyle(.plain)
+                    .environment(\.editMode, .constant(.active))
                 }
             }
-            .listStyle(.plain)
-            .environment(\.editMode, .constant(.active))
             .navigationTitle(AppLocalization.format("queue.playingFrom", defaultFormat: "Playing from %@", player.queueTitle))
             .navigationBarTitleDisplayMode(.inline)
             .punScreen()

@@ -1,5 +1,5 @@
 //
-//  PunPlayer — UI/AlbumTracklistSheet.swift
+//  PunPlayer вЂ” UI/AlbumTracklistSheet.swift
 //  Lets listeners switch tracks in the current album without leaving the player.
 //  PunPlayer is licensed under GPLv3.
 //
@@ -40,7 +40,34 @@ struct AlbumTracklistSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
+        let tracks = albumSongs
+
+        VStack(spacing: 0) {
+            HStack(spacing: 12) {
+                Text("Album tracks")
+                    .font(Pun.body(.semibold))
+                    .foregroundStyle(Pun.text)
+                    .lineLimit(1)
+
+                Spacer(minLength: 8)
+
+                Button("Done") {
+                    closeSheet()
+                }
+                .font(Pun.body(.semibold))
+                .foregroundStyle(Pun.mango)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(Pun.surfaceRaised.opacity(0.85), in: Capsule())
+                .buttonStyle(.plain)
+                .accessibilityLabel("Close tracklist")
+            }
+            .padding(.horizontal, 18)
+            .padding(.top, 14)
+            .padding(.bottom, 10)
+
+            Divider().overlay(Pun.separator.opacity(0.55))
+
             List {
                 Section {
                     HStack(spacing: 14) {
@@ -54,7 +81,7 @@ struct AlbumTracklistSheet: View {
                                 .font(Pun.body(.medium))
                                 .foregroundStyle(Pun.textDim)
                                 .lineLimit(1)
-                            Text(AppLocalization.count(albumSongs.count, noun: "track"))
+                            Text(AppLocalization.count(tracks.count, noun: "track"))
                                 .font(Pun.caption())
                                 .foregroundStyle(Pun.mango)
                         }
@@ -64,10 +91,10 @@ struct AlbumTracklistSheet: View {
                 }
 
                 Section("Tracks") {
-                    ForEach(Array(albumSongs.enumerated()), id: \.element.id) { index, song in
+                    ForEach(Array(tracks.enumerated()), id: \.element.id) { index, song in
                         Button {
                             // Rebuild playback around this album so next/previous stay in its tracklist.
-                            player.play(songs: albumSongs, start: song, title: currentSong.album)
+                            player.play(songs: tracks, start: song, title: currentSong.album)
                             closeSheet()
                         } label: {
                             HStack(spacing: 11) {
@@ -85,14 +112,8 @@ struct AlbumTracklistSheet: View {
                 }
             }
             .listStyle(.plain)
-            .navigationTitle("Album tracks")
-            .navigationBarTitleDisplayMode(.inline)
-            .punScreen()
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") { closeSheet() }
-                }
-            }
+            .scrollContentBackground(.hidden)
         }
+        .background(AppBackground())
     }
 }

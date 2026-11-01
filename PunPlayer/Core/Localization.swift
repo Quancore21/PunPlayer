@@ -62,6 +62,7 @@ enum AppLocalization {
             let english: (String, String)
             switch noun {
             case "song": english = ("song", "songs")
+            case "track": english = ("track", "tracks")
             case "lyrics file": english = ("lyrics file", "lyrics files")
             case "file": english = ("file", "files")
             case "minute": english = ("min", "min")
@@ -84,7 +85,7 @@ enum AppLocalization {
         }
         let word: String
         switch noun {
-        case "song": word = ["трек", "трека", "треков"][form]
+        case "song", "track": word = ["трек", "трека", "треков"][form]
         case "lyrics file": word = ["файл с текстом", "файла с текстом", "файлов с текстом"][form]
         case "file": word = ["файл", "файла", "файлов"][form]
         case "minute": word = "мин"

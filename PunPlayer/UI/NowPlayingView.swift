@@ -21,7 +21,7 @@ struct NowPlayingView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
 
-    private let metrics = ScreenMetrics.shared
+    private var metrics: ScreenMetrics { ScreenMetrics.shared }
     @State private var showLyrics = false
     @State private var activeSheet: PlayerSheet?
     @State private var showTracklistDrawer = false
@@ -125,7 +125,8 @@ struct NowPlayingView: View {
                                 }
                         )
                     }
-                    .ignoresSafeArea(edges: .bottom)
+                    .padding(.top, metrics.topSafeArea + 4)
+                    .padding(.bottom, max(8, metrics.bottomSafeArea * 0.5))
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -341,8 +342,8 @@ struct NowPlayingView: View {
             .layoutPriority(1)
         }
         .padding(.horizontal, 22)
-        .padding(.top, metrics.isCompact ? 10 : 48)
-        .padding(.bottom, metrics.isCompact ? 12 : 36)
+        .padding(.top, metrics.playerTopPadding)
+        .padding(.bottom, metrics.playerBottomPadding)
         .frame(maxWidth: 520)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -359,8 +360,8 @@ struct NowPlayingView: View {
             Spacer(minLength: 8)
         }
         .padding(.horizontal, 22)
-        .padding(.top, metrics.isCompact ? 10 : 48)
-        .padding(.bottom, metrics.isCompact ? 12 : 36)
+        .padding(.top, metrics.playerTopPadding)
+        .padding(.bottom, metrics.playerBottomPadding)
         .frame(maxWidth: 520)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }

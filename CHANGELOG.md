@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.0.9
+
+- Dynamic Island & Notch safe-area clearance: ScreenMetrics now caches hardware-accurate top and bottom safe-area bounds so the player header and Album Tracklist Drawer never overlap the Dynamic Island, notch, status bar clock, or Home Indicator
+- Dedicated Album Tracklist Drawer header: replaced the suppressed nested NavigationStack bar with an explicit header bar (Album tracks + Done button), a leading grab handle pill, and automatic scroll-to-current-track on open
+- Fixed Russian pluralization for album track counts and added missing localization keys (Repeat one, Language, Version)
+- Performance optimizations: memoized album tracklist filtering/sorting during 60-120 FPS drawer drag gestures, precomputed recentlyAdded in LibraryStore, and unified right-edge swipe opening with drawerAnimationToken
+
 ## 0.0.8
 
 - ScreenMetrics caching: device metrics and optimal player layout dimensions are now precomputed and cached on launch, eliminating real-time player stretching/resizing during navigation transitions

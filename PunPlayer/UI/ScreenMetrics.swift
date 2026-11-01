@@ -1,5 +1,5 @@
 //
-//  PunPlayer — UI/ScreenMetrics.swift
+//  PunPlayer вЂ” UI/ScreenMetrics.swift
 //  Pre-computes and caches device screen dimensions at launch so the player
 //  layout never animates or stretches in real time during navigation transitions.
 //  PunPlayer is licensed under GPLv3.
@@ -15,6 +15,10 @@ struct ScreenMetrics {
 
     let screenSize: CGSize
     let isCompact: Bool
+    let topSafeArea: CGFloat
+    let bottomSafeArea: CGFloat
+    let playerTopPadding: CGFloat
+    let playerBottomPadding: CGFloat
     let availableContentHeight: CGFloat
     let artworkSide: CGFloat
     let drawerWidth: CGFloat
@@ -30,6 +34,16 @@ struct ScreenMetrics {
         let compact = height < 700
         self.isCompact = compact
 
+        // Pure geometric safe-area clearance: all Face ID iPhones (Notch & Dynamic Island)
+        // have portrait height >= 780pt; 62pt clears both Dynamic Island (59-62pt) and Notch (47-50pt).
+        let hasNotchOrIsland = height >= 780
+        let topSafe: CGFloat = hasNotchOrIsland ? 62 : 20
+        let bottomSafe: CGFloat = hasNotchOrIsland ? 34 : 0
+        self.topSafeArea = topSafe
+        self.bottomSafeArea = bottomSafe
+        self.playerTopPadding = compact ? 10 : topSafe
+        self.playerBottomPadding = compact ? 12 : 36
+
         let ctrlFootprint: CGFloat = compact ? 210 : 240
         let hdrFootprint: CGFloat = 52
         let vMargins: CGFloat = 16
@@ -37,8 +51,7 @@ struct ScreenMetrics {
         self.headerFootprint = hdrFootprint
 
         let availableWidth = max(120, width - 44)
-        // Approximate safe area vertical padding (status bar + home indicator)
-        let safeVertical: CGFloat = height >= 800 ? 81 : 20
+        let safeVertical: CGFloat = height >= 800 ? 96 : 20
         let contentH = max(400, height - safeVertical)
         self.availableContentHeight = contentH
 

@@ -44,7 +44,28 @@ struct SettingsView: View {
             .listRowBackground(Pun.surface)
 
             Section {
-                Toggle("PunPun", isOn: $settings.showPunPun)
+                Toggle(isOn: $settings.showPunPun) {
+                    HStack(spacing: 12) {
+                        PunPunMiniFaceView(isPlaying: settings.showPunPun, size: 30)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Show PunPun in player")
+                                .font(Pun.body(.medium))
+                                .foregroundStyle(Pun.text)
+                            Text("Interactive mascot companion")
+                                .font(Pun.caption())
+                                .foregroundStyle(Pun.textDim)
+                        }
+                    }
+                }
+            } header: {
+                Text("PunPun").foregroundStyle(Pun.textDim)
+            } footer: {
+                Text("PunPun lives in the player and mini-player, dances to the rhythm of your music, naps when paused, and reacts when tapped. Disabled by default.")
+                    .foregroundStyle(Pun.textDim)
+            }
+            .listRowBackground(Pun.surface)
+
+            Section {
                 Toggle("Show player gesture guide", isOn: $settings.showGestureGuide)
             } header: {
                 Text("Player gestures").foregroundStyle(Pun.textDim)

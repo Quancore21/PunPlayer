@@ -582,6 +582,11 @@ struct MiniPlayer: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel(Text(AppLocalization.format("accessibility.openPlayer", defaultFormat: "Open player for %@", song.title)))
 
+                    if settings.showPunPun {
+                        PunPunMiniFaceView(isPlaying: player.isPlaying, size: 28)
+                            .padding(.trailing, 2)
+                    }
+
                     Button { player.togglePlayPause() } label: {
                         Image(systemName: player.isActive ? "pause.fill" : "play.fill")
                             .font(.system(size: 17, weight: .semibold))

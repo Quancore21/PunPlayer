@@ -56,6 +56,19 @@ actor WaveformCache {
         return result
     }
 
+    /// Pre-computes and caches waveforms in the background so tracks display instantly when opened.
+    func preload(songs: [Song]) async {
+        for song in songs {
+            guard !Task.isCancelled else { return }
+            let key = Self.stableKey(for: song)
+            if memory[key] != nil || unsupported.contains(key) { continue }
+            let url = Self.cacheURL(for: key)
+            if FileManager.default.fileExists(atPath: url.path) { continue }
+            _ = await waveform(for: song)
+            await Task.yield()
+        }
+    }
+
     private static func stableKey(for song: Song) -> String {
         let signature = "\(song.id.uuidString)|\(song.relativePath)|\(song.fileSize ?? -1)|\(song.modifiedAt?.timeIntervalSince1970 ?? 0)|\(song.fileCreatedAt?.timeIntervalSince1970 ?? 0)"
         var hash: UInt64 = 14_695_981_039_346_656_037

@@ -33,13 +33,17 @@ final class LibraryStore: ObservableObject, RecoverableStorage {
     // when importing files while the launch-time scan is still running.
     private var rescanRequested = false
     private var pendingForceRefresh = false
+    private var waveformPreloadTask: Task<Void, Never>?
     private let store = JSONStore<[Song]>(url: AppPaths.appSupport.appendingPathComponent("library.json"))
     /// path -> ID, kept even for files that disappeared (see SongIDMap).
     private var idMap = SongIDMap()
     private let idMapStore = JSONStore<SongIDMap>(url: AppPaths.appSupport.appendingPathComponent("idmap.json"))
 
     init() {
-        if let loaded = store.load() { apply(loaded) }
+        if let loaded = store.load() {
+            apply(loaded)
+            scheduleWaveformPreload(for: loaded)
+        }
         if let map = idMapStore.load() { idMap = map }
         storageIssue = store.issue ?? idMapStore.issue
         isReadOnly = store.isSavingBlocked || idMapStore.isSavingBlocked
@@ -52,7 +56,8 @@ final class LibraryStore: ObservableObject, RecoverableStorage {
         if let message = result.message { storageIssue = message }
     }
 
-    private func persistIDMap() {
+    private func persistIDMap()
+                scheduleWaveformPreload(for: result) {
         let result = idMapStore.trySave(idMap)
         refreshReadOnlyState()
         if let message = result.message { storageIssue = message }
@@ -77,9 +82,11 @@ final class LibraryStore: ObservableObject, RecoverableStorage {
         case .notBlocked:
             // Also retries transient write failures that did not block the store.
             persistIDMap()
+                scheduleWaveformPreload(for: result)
         case .recovered(let onDisk):
             if let onDisk { idMap = onDisk }
-            else { persistIDMap() }
+            else { persistIDMap()
+                scheduleWaveformPreload(for: result) }
         case .stillBlocked(let message):
             messages.append(message)
         }
@@ -104,6 +111,7 @@ final class LibraryStore: ObservableObject, RecoverableStorage {
         if didReset {
             persist()
             persistIDMap()
+                scheduleWaveformPreload(for: result)
             if !isReadOnly { storageIssue = nil }
         }
     }
@@ -115,6 +123,14 @@ final class LibraryStore: ObservableObject, RecoverableStorage {
     }
 
     func song(id: UUID) -> Song? { index[id] }
+
+    private func scheduleWaveformPreload(for tracks: [Song]) {
+        waveformPreloadTask?.cancel()
+        guard !tracks.isEmpty else { return }
+        waveformPreloadTask = Task.detached(priority: .background) {
+            await WaveformCache.shared.preload(songs: tracks)
+        }
+    }
 
     private func apply(_ newSongs: [Song]) {
         let sorted = newSongs.sorted(by: LibraryGrouping.titleOrder)
@@ -155,6 +171,7 @@ final class LibraryStore: ObservableObject, RecoverableStorage {
                 // Remember every ID so references survive library loss or a file returning later.
                 idMap.record(result)
                 persistIDMap()
+                scheduleWaveformPreload(for: result)
             case .incomplete(let errors):
                 // Part of the folder could not be read. Do not treat invisible files as deleted.
                 let shown = errors.prefix(3).joined(separator: "; ")
@@ -387,7 +404,7 @@ final class SettingsStore: ObservableObject {
     private static let appearanceKey = "punplayer.appearance"
     private static let appIconKey = "punplayer.appIcon"
     private static let gestureGuideKey = "punplayer.showGestureGuide"
-    private static let showPunPunKey = "punplayer.showPunPun"
+    private static let showPunPunKey = "punplayer.punpunEnabled"
 
     @Published var appearance: PunAppearance {
         didSet { UserDefaults.standard.set(appearance.rawValue, forKey: Self.appearanceKey) }
@@ -427,7 +444,7 @@ final class SettingsStore: ObservableObject {
         appearance = PunAppearance(rawValue: UserDefaults.standard.string(forKey: Self.appearanceKey) ?? "dark") ?? .dark
         appIcon = PunAppIcon(rawValue: UserDefaults.standard.string(forKey: Self.appIconKey) ?? "liquidGlass") ?? .liquidGlass
         language = PunLanguage(rawValue: UserDefaults.standard.string(forKey: AppLocalization.preferenceKey) ?? "system") ?? .system
-        showPunPun = UserDefaults.standard.object(forKey: Self.showPunPunKey) as? Bool ?? true
+        showPunPun = UserDefaults.standard.object(forKey: Self.showPunPunKey) as? Bool ?? false
         showGestureGuide = UserDefaults.standard.object(forKey: Self.gestureGuideKey) as? Bool ?? true
         if let data = UserDefaults.standard.data(forKey: Self.key),
            let decoded = try? JSONDecoder().decode(SmartPlaylistSettings.self, from: data) {

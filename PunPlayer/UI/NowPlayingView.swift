@@ -477,7 +477,7 @@ struct NowPlayingView: View {
                     song: song,
                     isPlaying: player.isPlaying,
                     clock: player.clock,
-                    size: metrics.isCompact ? 46 : 56
+                    size: metrics.isCompact ? 52 : 62
                 )
                 .padding(.bottom, -4)
             }

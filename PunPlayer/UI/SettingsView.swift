@@ -44,7 +44,7 @@ struct SettingsView: View {
             .listRowBackground(Pun.surface)
 
             Section {
-                Toggle("PunPun companion", isOn: $settings.showPunPun)
+                Toggle("PunPun", isOn: $settings.showPunPun)
                 Toggle("Show player gesture guide", isOn: $settings.showGestureGuide)
             } header: {
                 Text("Player gestures").foregroundStyle(Pun.textDim)

@@ -124,7 +124,7 @@ struct SettingsView: View {
             .listRowBackground(Pun.surface)
 
             Section {
-                LabeledContent("Version", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.1.0")
+                LabeledContent("Version", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.1")
                 Text("PunPlayer is free software under GPLv3. Playback logic is derived from TimberX by Naman Dwivedi and Musicr by dtrung98 (with code by Karim Abou Zeid).")
                     .font(Pun.caption())
                     .foregroundStyle(Pun.textDim)

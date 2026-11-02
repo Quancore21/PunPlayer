@@ -25,7 +25,11 @@ enum AppLocalization {
 
     static var isRussian: Bool {
         if let code = preferredCode { return code == "ru" }
-        return Locale.current.languageCode == "ru"
+        if #available(iOS 16, macOS 13, *) {
+            return Locale.current.language.languageCode?.identifier == "ru"
+        } else {
+            return Locale.current.languageCode == "ru"
+        }
     }
 
     private static var selectedBundle: Bundle {

@@ -144,7 +144,6 @@ private struct HomeView: View {
     @EnvironmentObject private var playlists: PlaylistStore
     @EnvironmentObject private var settings: SettingsStore
     @EnvironmentObject private var player: PlayerEngine
-    @EnvironmentObject private var settings: SettingsStore
     @State private var showImporter = false
     @State private var showGestureGuideUndo = false
     @State private var gestureUndoGeneration = 0

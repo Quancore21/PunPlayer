@@ -322,7 +322,7 @@ private struct MusicImporter: ViewModifier {
             case .success(let urls):
                 Task { await library.importFiles(urls) }
             case .failure(let error):
-                Task { await library.reportImportFailure(error) }
+                Task { @MainActor in library.reportImportFailure(error) }
             }
         }
     }

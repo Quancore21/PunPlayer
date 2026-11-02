@@ -17,20 +17,25 @@ struct PunPunCompanionView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var waveform: [Float] = []
     @State private var tapReactionUntil: Date = .distantPast
-    @State private var tapSeed: Int = 0
 
-    private static let chillFrames = [
-        "punpun_chill_1", "punpun_chill_2", "punpun_sway", "punpun_chill_1", "punpun_front"
+    // Coherent ping-pong cycles so adjacent frames share body orientation and flow naturally
+    private static let chillCycle = [
+        "punpun_chill_1", "punpun_sway", "punpun_chill_2", "punpun_sway",
+        "punpun_chill_1", "punpun_sing", "punpun_sway", "punpun_chill_2"
     ]
 
-    private static let energeticFrames = [
-        "punpun_dance_1", "punpun_walk_1", "punpun_dance_2", "punpun_dance_3",
-        "punpun_wink", "punpun_sing", "punpun_jump", "punpun_lean",
-        "punpun_back", "punpun_front"
+    private static let grooveCycle = [
+        "punpun_walk_1", "punpun_dance_1", "punpun_dance_2", "punpun_dance_3",
+        "punpun_wink", "punpun_dance_3", "punpun_dance_2", "punpun_dance_1"
     ]
 
-    private static let loveFrames = [
-        "punpun_love", "punpun_wink", "punpun_jump", "punpun_love"
+    private static let hypeCycle = [
+        "punpun_dance_2", "punpun_dance_3", "punpun_jump", "punpun_wink",
+        "punpun_lean", "punpun_front", "punpun_back", "punpun_front"
+    ]
+
+    private static let loveCycle = [
+        "punpun_jump", "punpun_wink", "punpun_love", "punpun_front", "punpun_love"
     ]
 
     private var waveformTaskID: String {
@@ -51,37 +56,34 @@ struct PunPunCompanionView: View {
             let t = now.timeIntervalSinceReferenceDate
             let isReacting = now < tapReactionUntil
             let energy = currentEnergy
-            let isHighEnergy = energy >= 0.44
-            let state = computePose(t: t, isReacting: isReacting, isHighEnergy: isHighEnergy, energy: energy)
+            let state = computePose(t: t, isReacting: isReacting, energy: energy)
 
             ZStack(alignment: .bottom) {
-                // Soft ground shadow beneath PunPun
                 Ellipse()
-                    .fill(Color.black.opacity(0.24))
-                    .frame(width: size * state.shadowScale, height: size * 0.13)
+                    .fill(Color.black.opacity(0.22))
+                    .frame(width: size * state.shadowScale, height: size * 0.12)
                     .offset(y: -2)
 
-                // Floating particles (notes, hearts, zzz)
                 if !reduceMotion {
-                    particleOverlay(t: t, isReacting: isReacting, isHighEnergy: isHighEnergy)
+                    particleOverlay(t: t, isReacting: isReacting, energy: energy)
                 }
 
                 Image(state.assetName)
                     .resizable()
                     .interpolation(.high)
+                    .antialiased(true)
                     .scaledToFit()
                     .frame(width: size, height: size)
                     .scaleEffect(x: state.scaleX, y: state.scaleY, anchor: .bottom)
                     .rotationEffect(.degrees(state.rotation), anchor: .bottom)
                     .offset(y: state.offsetY)
             }
-            .frame(width: size + 12, height: size + 8)
+            .frame(width: size + 10, height: size + 6)
             .contentShape(Rectangle())
             .onTapGesture {
                 let generator = UIImpactFeedbackGenerator(style: .light)
                 generator.impactOccurred()
-                tapSeed &+= 1
-                tapReactionUntil = Date().addingTimeInterval(1.45)
+                tapReactionUntil = Date().addingTimeInterval(1.5)
             }
         }
         .task(id: waveformTaskID) {
@@ -106,101 +108,104 @@ struct PunPunCompanionView: View {
         let shadowScale: CGFloat
     }
 
-    private func computePose(t: Double, isReacting: Bool, isHighEnergy: Bool, energy: Float) -> PoseState {
+    private func computePose(t: Double, isReacting: Bool, energy: Float) -> PoseState {
         if isReacting {
-            let idx = Int(t * 5.0) % Self.loveFrames.count
-            let frame = Self.loveFrames[idx]
-            let bounce = abs(sin(t * 11.0))
+            let speed = 4.2
+            let idx = Int(t * speed) % Self.loveCycle.count
+            let frame = Self.loveCycle[idx]
+            let bounce = abs(sin(t * speed * .pi))
             return PoseState(
                 assetName: frame,
-                scaleX: reduceMotion ? 1.0 : CGFloat(1.04 - bounce * 0.08),
-                scaleY: reduceMotion ? 1.0 : CGFloat(0.95 + bounce * 0.12),
-                rotation: reduceMotion ? 0 : sin(t * 9.0) * 5.0,
-                offsetY: reduceMotion ? 0 : CGFloat(-bounce * 6.0),
-                shadowScale: CGFloat(0.62 - bounce * 0.18)
+                scaleX: reduceMotion ? 1.0 : CGFloat(1.03 - bounce * 0.06),
+                scaleY: reduceMotion ? 1.0 : CGFloat(0.96 + bounce * 0.09),
+                rotation: reduceMotion ? 0 : sin(t * speed * 1.5) * 3.8,
+                offsetY: reduceMotion ? 0 : CGFloat(-bounce * 5.0),
+                shadowScale: CGFloat(0.62 - bounce * 0.16)
             )
         }
 
-        guard song != nil else {
-            let sway = sin(t * 1.8)
-            return PoseState(
-                assetName: "punpun_curious",
-                scaleX: 1.0,
-                scaleY: reduceMotion ? 1.0 : CGFloat(1.0 + abs(sway) * 0.02),
-                rotation: reduceMotion ? 0 : sway * 3.5,
-                offsetY: 0,
-                shadowScale: 0.58
-            )
-        }
-
-        if !isPlaying {
-            let breath = sin(t * 2.1)
+        guard song != nil, isPlaying else {
+            let breath = sin(t * 2.0)
             return PoseState(
                 assetName: "punpun_sleep",
-                scaleX: reduceMotion ? 1.0 : CGFloat(1.0 + breath * 0.028),
-                scaleY: reduceMotion ? 1.0 : CGFloat(1.0 - breath * 0.032),
+                scaleX: reduceMotion ? 1.0 : CGFloat(1.0 + breath * 0.024),
+                scaleY: reduceMotion ? 1.0 : CGFloat(1.0 - breath * 0.028),
                 rotation: 0,
                 offsetY: 1,
-                shadowScale: 0.72
+                shadowScale: 0.70
             )
         }
 
-        if isHighEnergy {
-            let speed = 3.2 + Double(energy) * 1.2
-            let idx = Int(t * speed) % Self.energeticFrames.count
-            let frame = Self.energeticFrames[idx]
+        if energy >= 0.66 {
+            let speed = 3.2
+            let idx = Int(t * speed) % Self.hypeCycle.count
+            let frame = Self.hypeCycle[idx]
             let beat = abs(sin(t * speed * .pi))
-            let isJumpFrame = (frame == "punpun_jump")
+            let jumpBoost: Double = (frame == "punpun_jump") ? 5.5 : 3.0
             return PoseState(
                 assetName: frame,
-                scaleX: reduceMotion ? 1.0 : CGFloat(1.04 - beat * 0.07),
-                scaleY: reduceMotion ? 1.0 : CGFloat(0.95 + beat * 0.09),
-                rotation: reduceMotion ? 0 : sin(t * speed * 1.5) * 4.2,
-                offsetY: reduceMotion ? 0 : CGFloat(-beat * (isJumpFrame ? 6.5 : 3.5)),
-                shadowScale: CGFloat(0.60 - beat * 0.15)
+                scaleX: reduceMotion ? 1.0 : CGFloat(1.03 - beat * 0.05),
+                scaleY: reduceMotion ? 1.0 : CGFloat(0.96 + beat * 0.07),
+                rotation: reduceMotion ? 0 : sin(t * speed * 1.5) * 3.5,
+                offsetY: reduceMotion ? 0 : CGFloat(-beat * jumpBoost),
+                shadowScale: CGFloat(0.60 - beat * 0.14)
+            )
+        } else if energy >= 0.36 {
+            let speed = 2.6
+            let idx = Int(t * speed) % Self.grooveCycle.count
+            let frame = Self.grooveCycle[idx]
+            let beat = abs(sin(t * speed * .pi))
+            return PoseState(
+                assetName: frame,
+                scaleX: reduceMotion ? 1.0 : CGFloat(1.02 - beat * 0.04),
+                scaleY: reduceMotion ? 1.0 : CGFloat(0.97 + beat * 0.05),
+                rotation: reduceMotion ? 0 : sin(t * speed * 1.5) * 2.8,
+                offsetY: reduceMotion ? 0 : CGFloat(-beat * 2.4),
+                shadowScale: CGFloat(0.62 - beat * 0.10)
             )
         } else {
-            let speed = 1.75
-            let idx = Int(t * speed) % Self.chillFrames.count
-            let frame = Self.chillFrames[idx]
-            let pulse = sin(t * speed * .pi)
+            let speed = 1.65
+            let idx = Int(t * speed) % Self.chillCycle.count
+            let frame = Self.chillCycle[idx]
+            let sway = sin(t * speed * .pi)
             return PoseState(
                 assetName: frame,
-                scaleX: reduceMotion ? 1.0 : CGFloat(1.0 - abs(pulse) * 0.025),
-                scaleY: reduceMotion ? 1.0 : CGFloat(1.0 + abs(pulse) * 0.035),
-                rotation: reduceMotion ? 0 : pulse * 2.6,
-                offsetY: reduceMotion ? 0 : CGFloat(-abs(pulse) * 1.8),
+                scaleX: reduceMotion ? 1.0 : CGFloat(1.0 - abs(sway) * 0.02),
+                scaleY: reduceMotion ? 1.0 : CGFloat(1.0 + abs(sway) * 0.03),
+                rotation: reduceMotion ? 0 : sway * 2.2,
+                offsetY: reduceMotion ? 0 : CGFloat(-abs(sway) * 1.4),
                 shadowScale: 0.62
             )
         }
     }
 
     @ViewBuilder
-    private func particleOverlay(t: Double, isReacting: Bool, isHighEnergy: Bool) -> some View {
-        let phase1 = (t * 0.85).truncatingRemainder(dividingBy: 1.0)
-        let phase2 = (t * 0.85 + 0.5).truncatingRemainder(dividingBy: 1.0)
-        let symbol: String = isReacting ? "heart.fill" : (song == nil ? "questionmark" : (isPlaying ? (isHighEnergy ? "music.quarternote.3" : "music.note") : "zzz"))
+    private func particleOverlay(t: Double, isReacting: Bool, energy: Float) -> some View {
+        let phase1 = (t * 0.80).truncatingRemainder(dividingBy: 1.0)
+        let phase2 = (t * 0.80 + 0.5).truncatingRemainder(dividingBy: 1.0)
+        let isHigh = energy >= 0.45
+        let symbol: String = isReacting ? "heart.fill" : ((song != nil && isPlaying) ? (isHigh ? "music.quarternote.3" : "music.note") : "zzz")
         let tintColor: Color = isReacting ? Color(red: 1.0, green: 0.42, blue: 0.55) : Pun.mango
 
         ZStack {
             Image(systemName: symbol)
-                .font(.system(size: size * 0.20, weight: .bold))
-                .foregroundStyle(tintColor.opacity((1.0 - phase1) * 0.88))
+                .font(.system(size: size * 0.19, weight: .bold))
+                .foregroundStyle(tintColor.opacity((1.0 - phase1) * 0.85))
                 .offset(
-                    x: CGFloat(size * 0.34 + sin(phase1 * .pi * 2) * 4),
-                    y: CGFloat(-size * (0.55 + phase1 * 0.42))
+                    x: CGFloat(size * 0.34 + sin(phase1 * .pi * 2) * 3.5),
+                    y: CGFloat(-size * (0.56 + phase1 * 0.40))
                 )
-                .scaleEffect(CGFloat(0.75 + phase1 * 0.35))
+                .scaleEffect(CGFloat(0.75 + phase1 * 0.32))
 
-            if isReacting || isHighEnergy {
+            if isReacting || isHigh {
                 Image(systemName: isReacting ? "heart.fill" : "music.note")
-                    .font(.system(size: size * 0.17, weight: .bold))
-                    .foregroundStyle(tintColor.opacity((1.0 - phase2) * 0.80))
+                    .font(.system(size: size * 0.16, weight: .bold))
+                    .foregroundStyle(tintColor.opacity((1.0 - phase2) * 0.78))
                     .offset(
-                        x: CGFloat(-size * 0.32 + cos(phase2 * .pi * 2) * 4),
-                        y: CGFloat(-size * (0.50 + phase2 * 0.42))
+                        x: CGFloat(-size * 0.32 + cos(phase2 * .pi * 2) * 3.5),
+                        y: CGFloat(-size * (0.50 + phase2 * 0.40))
                     )
-                    .scaleEffect(CGFloat(0.70 + phase2 * 0.35))
+                    .scaleEffect(CGFloat(0.70 + phase2 * 0.30))
             }
         }
         .allowsHitTesting(false)

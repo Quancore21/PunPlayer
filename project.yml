@@ -18,7 +18,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.quancore21.punplayer
         PRODUCT_NAME: PunPlayer
-        MARKETING_VERSION: "0.1.0"
+        MARKETING_VERSION: "0.1"
         CURRENT_PROJECT_VERSION: "10"
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"

@@ -23,7 +23,7 @@ edge_swipe_tests = (ROOT / "Tests/PunCoreTests/PlayerEdgeSwipeTests.swift").read
 orbit_button = (ROOT / "PunPlayer/UI/OrbitPlayPauseButton.swift").read_text(encoding="utf-8")
 
 version_match = re.search(r'^\s*MARKETING_VERSION:\s*"([^"]+)"', project, re.MULTILINE)
-require(version_match is not None and version_match.group(1) == "0.1.0", "project.yml must declare MARKETING_VERSION 0.1.0")
+require(version_match is not None and version_match.group(1) == "0.1", "project.yml must declare MARKETING_VERSION 0.1")
 require('CURRENT_PROJECT_VERSION: "10"' in project, "project.yml must declare build number 10")
 require('.navigationDestination(isPresented: $showNowPlaying)' in root_view, "Player must use NavigationStack navigation (not a modal player sheet)")
 require('.sheet(isPresented: $showNowPlaying)' not in root_view, "Old modal player sheet must not return")

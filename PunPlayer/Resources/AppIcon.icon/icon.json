@@ -1,0 +1,93 @@
+{
+  "features" : [
+    "specular-location"
+  ],
+  "fill" : {
+    "linear-gradient" : [
+      "srgb:0.94360,0.94120,0.93640,1.00000",
+      "srgb:0.95250,0.95083,0.94750,1.00000"
+    ],
+    "orientation" : {
+      "start" : { "x" : 0.5, "y" : 0 },
+      "stop" : { "x" : 0.5, "y" : 1 }
+    }
+  },
+  "groups" : [
+    {
+      "blend-mode" : "normal",
+      "blur-material" : 0.2,
+      "hidden" : false,
+      "layers" : [
+        {
+          "blend-mode" : "normal",
+          "fill" : "automatic",
+          "glass" : true,
+          "hidden" : false,
+          "image-name" : "02-amber-disc.svg",
+          "name" : "02-amber-disc",
+          "opacity" : 1,
+          "position" : { "scale" : 1, "translation-in-points" : [ 0, 0 ] }
+        }
+      ],
+      "lighting" : "individual",
+      "opacity" : 1,
+      "position" : { "scale" : 1, "translation-in-points" : [ 0, 0 ] },
+      "refractivity" : { "depth" : 0, "enabled" : false, "strength" : 0 },
+      "shadow" : { "kind" : "neutral", "opacity" : 0.5 },
+      "specular" : true,
+      "translucency" : { "enabled" : true, "value" : 0.5 }
+    },
+    {
+      "blend-mode" : "normal",
+      "blur-material" : 0.5,
+      "hidden" : false,
+      "layers" : [
+        {
+          "blend-mode" : "normal",
+          "fill" : "automatic",
+          "glass" : true,
+          "hidden" : false,
+          "image-name" : "01-black-disc.svg",
+          "name" : "01-black-disc",
+          "opacity" : 1,
+          "position" : { "scale" : 1, "translation-in-points" : [ 0, 0 ] }
+        }
+      ],
+      "lighting" : "individual",
+      "opacity" : 1,
+      "position" : { "scale" : 1, "translation-in-points" : [ 0, 0 ] },
+      "refractivity" : { "depth" : 0, "enabled" : false, "strength" : 0.5 },
+      "shadow" : { "kind" : "neutral", "opacity" : 0.5 },
+      "specular" : "inside",
+      "translucency" : { "enabled" : true, "value" : 0.5 }
+    },
+    {
+      "blend-mode" : "normal",
+      "blur-material" : null,
+      "hidden" : false,
+      "layers" : [
+        {
+          "blend-mode" : "normal",
+          "fill" : "automatic",
+          "glass" : false,
+          "hidden" : false,
+          "image-name" : "00-background.svg",
+          "name" : "00-background",
+          "opacity" : 1,
+          "position" : { "scale" : 1, "translation-in-points" : [ 0, 0 ] }
+        }
+      ],
+      "lighting" : "individual",
+      "opacity" : 1,
+      "position" : { "scale" : 1, "translation-in-points" : [ 0, 0 ] },
+      "refractivity" : { "depth" : 0, "enabled" : false, "strength" : 0.5 },
+      "shadow" : { "kind" : "neutral", "opacity" : 0.5 },
+      "specular" : true,
+      "translucency" : { "enabled" : true, "value" : 0.5 }
+    }
+  ],
+  "supported-platforms" : {
+    "circles" : [ "watchOS" ],
+    "squares" : "shared"
+  }
+}

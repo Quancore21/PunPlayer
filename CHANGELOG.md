@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.0
+
+- New Liquid Glass App Icon (Default): crafted from the Apple Icon Composer specification with translucent amber glass, inner-specular dark planet, and warm cream gradient
+- Switchable App Icons in Settings: choose between Liquid Glass (default) and Classic in Settings -> Personalization -> App icon; updates both the iOS Home Screen icon and the in-app header mark
+- Stored the native Apple Icon Composer bundle in PunPlayer/Resources/AppIcon.icon
+
 ## 0.0.9
 
 - Dynamic Island & Notch safe-area clearance: ScreenMetrics now caches hardware-accurate top and bottom safe-area bounds so the player header and Album Tracklist Drawer never overlap the Dynamic Island, notch, status bar clock, or Home Indicator

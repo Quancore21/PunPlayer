@@ -8,6 +8,7 @@ import SwiftUI
 
 struct RootView: View {
     @EnvironmentObject private var player: PlayerEngine
+    @EnvironmentObject private var settings: SettingsStore
     @EnvironmentObject private var library: LibraryStore
     @EnvironmentObject private var stats: StatsStore
     @EnvironmentObject private var playlists: PlaylistStore
@@ -143,6 +144,7 @@ private struct HomeView: View {
     @EnvironmentObject private var playlists: PlaylistStore
     @EnvironmentObject private var settings: SettingsStore
     @EnvironmentObject private var player: PlayerEngine
+    @EnvironmentObject private var settings: SettingsStore
     @State private var showImporter = false
     @State private var showGestureGuideUndo = false
     @State private var gestureUndoGeneration = 0
@@ -176,7 +178,7 @@ private struct HomeView: View {
 
     private var header: some View {
         HStack(alignment: .center, spacing: 10) {
-            Image("PunPlayerMark")
+            Image(settings.appIcon.markAssetName)
                 .resizable()
                 .scaledToFit()
                 .frame(width: 36, height: 36)
@@ -552,6 +554,7 @@ private struct ShortcutCard: View {
 
 struct MiniPlayer: View {
     @EnvironmentObject private var player: PlayerEngine
+    @EnvironmentObject private var settings: SettingsStore
     let onTap: () -> Void
 
     var body: some View {
@@ -579,6 +582,15 @@ struct MiniPlayer: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(Text(AppLocalization.format("accessibility.openPlayer", defaultFormat: "Open player for %@", song.title)))
+
+                    if settings.showPunPun {
+                        PunPunCompanionView(
+                            song: song,
+                            isPlaying: player.isPlaying,
+                            clock: player.clock,
+                            size: 32
+                        )
+                    }
 
                     Button { player.togglePlayPause() } label: {
                         Image(systemName: player.isActive ? "pause.fill" : "play.fill")

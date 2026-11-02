@@ -8,6 +8,7 @@
 
 import Foundation
 import Combine
+import UIKit
 
 // MARK: - Library
 
@@ -384,10 +385,19 @@ final class PlaylistStore: ObservableObject, RecoverableStorage {
 final class SettingsStore: ObservableObject {
     private static let key = "punplayer.smartPlaylistSettings"
     private static let appearanceKey = "punplayer.appearance"
+    private static let appIconKey = "punplayer.appIcon"
     private static let gestureGuideKey = "punplayer.showGestureGuide"
+    private static let showPunPunKey = "punplayer.showPunPun"
 
     @Published var appearance: PunAppearance {
         didSet { UserDefaults.standard.set(appearance.rawValue, forKey: Self.appearanceKey) }
+    }
+
+    @Published var appIcon: PunAppIcon {
+        didSet {
+            UserDefaults.standard.set(appIcon.rawValue, forKey: Self.appIconKey)
+            applySystemIcon(appIcon)
+        }
     }
 
     @Published var language: PunLanguage {
@@ -395,6 +405,10 @@ final class SettingsStore: ObservableObject {
     }
 
     /// The home guide is only a hint. Turning it off never disables the edge gestures themselves.
+    @Published var showPunPun: Bool {
+        didSet { UserDefaults.standard.set(showPunPun, forKey: Self.showPunPunKey) }
+    }
+
     @Published var showGestureGuide: Bool {
         didSet { UserDefaults.standard.set(showGestureGuide, forKey: Self.gestureGuideKey) }
     }
@@ -411,13 +425,24 @@ final class SettingsStore: ObservableObject {
     /// actually changes a setting, so the old value is not destroyed by merely launching.
     init() {
         appearance = PunAppearance(rawValue: UserDefaults.standard.string(forKey: Self.appearanceKey) ?? "dark") ?? .dark
+        appIcon = PunAppIcon(rawValue: UserDefaults.standard.string(forKey: Self.appIconKey) ?? "liquidGlass") ?? .liquidGlass
         language = PunLanguage(rawValue: UserDefaults.standard.string(forKey: AppLocalization.preferenceKey) ?? "system") ?? .system
+        showPunPun = UserDefaults.standard.object(forKey: Self.showPunPunKey) as? Bool ?? true
         showGestureGuide = UserDefaults.standard.object(forKey: Self.gestureGuideKey) as? Bool ?? true
         if let data = UserDefaults.standard.data(forKey: Self.key),
            let decoded = try? JSONDecoder().decode(SmartPlaylistSettings.self, from: data) {
             smart = decoded
         } else {
             smart = SmartPlaylistSettings()
+        }
+    }
+
+    private func applySystemIcon(_ icon: PunAppIcon) {
+        DispatchQueue.main.async {
+            guard UIApplication.shared.supportsAlternateIcons else { return }
+            let target = icon.alternateIconName
+            guard UIApplication.shared.alternateIconName != target else { return }
+            UIApplication.shared.setAlternateIconName(target) { _ in }
         }
     }
 }

@@ -24,3 +24,8 @@ PunPlayer-Info.plist
 *.cer
 *.privatekey
 secrets/
+*.zip
+*.ps1
+punplayer_source.txt
+Untitled.icon/
+punpun.png

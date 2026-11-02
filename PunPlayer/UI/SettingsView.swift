@@ -28,6 +28,11 @@ struct SettingsView: View {
                         Text(LocalizedStringKey(mode.title)).tag(mode)
                     }
                 }
+                Picker("App icon", selection: $settings.appIcon) {
+                    ForEach(PunAppIcon.allCases) { icon in
+                        Text(LocalizedStringKey(icon.title)).tag(icon)
+                    }
+                }
                 Picker("Language", selection: $settings.language) {
                     ForEach(PunLanguage.allCases) { language in
                         Text(LocalizedStringKey(language.title)).tag(language)
@@ -39,6 +44,7 @@ struct SettingsView: View {
             .listRowBackground(Pun.surface)
 
             Section {
+                Toggle("PunPun companion", isOn: $settings.showPunPun)
                 Toggle("Show player gesture guide", isOn: $settings.showGestureGuide)
             } header: {
                 Text("Player gestures").foregroundStyle(Pun.textDim)
@@ -118,7 +124,7 @@ struct SettingsView: View {
             .listRowBackground(Pun.surface)
 
             Section {
-                LabeledContent("Version", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.0.9")
+                LabeledContent("Version", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.1.0")
                 Text("PunPlayer is free software under GPLv3. Playback logic is derived from TimberX by Naman Dwivedi and Musicr by dtrung98 (with code by Karim Abou Zeid).")
                     .font(Pun.caption())
                     .foregroundStyle(Pun.textDim)

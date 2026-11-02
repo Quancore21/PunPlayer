@@ -441,35 +441,48 @@ struct NowPlayingView: View {
     }
 
     private func titleBlock(_ song: Song) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(song.title)
-                .font(Pun.title(.title2))
-                .tracking(-0.35)
-                .foregroundStyle(Pun.text)
-                .lineLimit(2)
-                .minimumScaleFactor(0.82)
-                .multilineTextAlignment(.leading)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .fixedSize(horizontal: false, vertical: true)
-                .id("title-\(song.id)")
-                .transition(.asymmetric(
-                    insertion: .opacity.combined(with: .offset(y: 4)),
-                    removal: .opacity.combined(with: .offset(y: -4))
-                ))
-            Text(song.artist)
-                .font(Pun.body(.medium))
-                .foregroundStyle(Pun.mango)
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .id("artist-\(song.id)")
-                .transition(.asymmetric(
-                    insertion: .opacity.combined(with: .offset(y: 4)),
-                    removal: .opacity.combined(with: .offset(y: -4))
-                ))
+        HStack(alignment: .bottom, spacing: 10) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(song.title)
+                    .font(Pun.title(.title2))
+                    .tracking(-0.35)
+                    .foregroundStyle(Pun.text)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.82)
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .id("title-\(song.id)")
+                    .transition(.asymmetric(
+                        insertion: .opacity.combined(with: .offset(y: 4)),
+                        removal: .opacity.combined(with: .offset(y: -4))
+                    ))
+                Text(song.artist)
+                    .font(Pun.body(.medium))
+                    .foregroundStyle(Pun.mango)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .id("artist-\(song.id)")
+                    .transition(.asymmetric(
+                        insertion: .opacity.combined(with: .offset(y: 4)),
+                        removal: .opacity.combined(with: .offset(y: -4))
+                    ))
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityElement(children: .combine)
+
+            if settings.showPunPun {
+                PunPunCompanionView(
+                    song: song,
+                    isPlaying: player.isPlaying,
+                    clock: player.clock,
+                    size: metrics.isCompact ? 46 : 56
+                )
+                .padding(.bottom, -4)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityElement(children: .combine)
         .animation(.easeInOut(duration: 0.22), value: song.id)
     }
 

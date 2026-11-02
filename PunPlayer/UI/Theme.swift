@@ -81,6 +81,34 @@ enum PunAppearance: String, CaseIterable, Identifiable {
     }
 }
 
+enum PunAppIcon: String, CaseIterable, Identifiable {
+    case liquidGlass = "liquidGlass"
+    case classic = "classic"
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .liquidGlass: return "Liquid Glass"
+        case .classic: return "Classic"
+        }
+    }
+
+    var alternateIconName: String? {
+        switch self {
+        case .liquidGlass: return nil
+        case .classic: return "AppIconClassic"
+        }
+    }
+
+    var markAssetName: String {
+        switch self {
+        case .liquidGlass: return "PunPlayerMark"
+        case .classic: return "PunPlayerMarkClassic"
+        }
+    }
+}
+
 enum PunLanguage: String, CaseIterable, Identifiable {
     case system = "system"
     case english = "en"

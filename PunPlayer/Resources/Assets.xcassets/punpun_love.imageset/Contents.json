@@ -1,0 +1,12 @@
+{
+  "images" : [
+    {
+      "filename" : "punpun_love.png",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}

@@ -6,6 +6,7 @@
 
 - [ ] `swift test`
 - [ ] `python3 Scripts/validate_localizations.py`
+- [ ] `python3 Scripts/validate_project.py`
 - [ ] iOS build checked in Xcode or GitHub Actions (state which)
 - [ ] Tested on a simulator/device when relevant
 - [ ] English and Russian strings updated together

@@ -11,7 +11,7 @@ body:
     id: version
     attributes:
       label: PunPlayer version
-      placeholder: 0.0.5 / commit hash
+      placeholder: 0.1 (Beta) / commit hash
     validations:
       required: true
   - type: input
@@ -27,7 +27,8 @@ body:
       label: Affected area
       options:
         - Playback / controls
-        - Player layout
+        - Player layout / Dynamic Island
+        - PunPun companion / app icons
         - Mini-player / navigation
         - Library / scanning
         - Import / export
@@ -42,7 +43,7 @@ body:
     attributes:
       label: Steps to reproduce
       description: Numbered, minimal steps are best.
-      placeholder: "1. Open…\n2. Tap…\n3. Observe…"
+      placeholder: "1. Open...\n2. Tap...\n3. Observe..."
     validations:
       required: true
   - type: textarea

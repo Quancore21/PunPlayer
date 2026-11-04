@@ -1,17 +1,13 @@
 # Changelog
 
-## 0.1
+## 0.1 -- Beta
 
-- New Liquid Glass App Icon (Default): crafted from the Apple Icon Composer specification with translucent amber glass, inner-specular dark planet, and warm cream gradient
-- Switchable App Icons in Settings: choose between Liquid Glass (default) and Classic in Settings -> Personalization -> App icon; updates both the iOS Home Screen icon and the in-app header mark
-- Stored the native Apple Icon Composer bundle in PunPlayer/Resources/AppIcon.icon
-
-## 0.0.9
-
-- Dynamic Island & Notch safe-area clearance: ScreenMetrics now caches hardware-accurate top and bottom safe-area bounds so the player header and Album Tracklist Drawer never overlap the Dynamic Island, notch, status bar clock, or Home Indicator
-- Dedicated Album Tracklist Drawer header: replaced the suppressed nested NavigationStack bar with an explicit header bar (Album tracks + Done button), a leading grab handle pill, and automatic scroll-to-current-track on open
-- Fixed Russian pluralization for album track counts and added missing localization keys (Repeat one, Language, Version)
-- Performance optimizations: memoized album tracklist filtering/sorting during 60-120 FPS drawer drag gestures, precomputed recentlyAdded in LibraryStore, and unified right-edge swipe opening with drawerAnimationToken
+- **First Beta Release (0.1):** transitioned PunPlayer from the `0.0.x` alpha series into the `0.x` beta line
+- **Liquid Glass & Classic Switchable App Icons:** added the new Liquid Glass icon (from the Apple Icon Composer specification) as default, with a live switcher for the Classic icon in `Settings -> Personalization -> App icon`
+- **PunPun Mascot Companion & Animated Mini-Faces:** integrated the 16-pose PunPun sprite sheet and 4 expressive mini-faces with native alpha transparency, uniform scale alignment, and a dedicated `PunPun` section in Settings (disabled by default)
+- **Waveform Rhythm Analyzer:** PunPun analyzes a local Gaussian window of RMS energy and onset flux from decoded waveforms for calm, natural dance pacing, sleeping on pause, and love/heart reactions on tap
+- **Background Waveform Preloading:** `LibraryStore` now schedules low-priority background waveform decoding via `WaveformCache.shared.preload` so tracks show their waveform immediately when opened
+- **Dynamic Island & Notch Safe-Area Clearance:** `AlbumTracklistSheet` now uses a dedicated header bar and floats cleanly below the Dynamic Island and status bar clock, with full Russian pluralization support
 
 ## 0.0.8
 

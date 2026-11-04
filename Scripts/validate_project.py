@@ -64,8 +64,8 @@ require('On cover: album tracks' not in (ROOT / "PunPlayer/Resources/en.lproj/Lo
 require('.frame(height: 48)' not in player_view and '.frame(minHeight: 48)' in player_view, "Player header must not use a clipping fixed height")
 
 for relative in [
-    "README.md", "LICENSE", "NOTICE.md", "CONTRIBUTING.md", "SECURITY.md", "PunPlayer/UI/AlbumTracklistSheet.swift",
-    "CHANGELOG.md", "docs/UI_VALIDATION_0.0.4.md", "docs/UI_VALIDATION_0.0.5.md",
+    "README.md", "LICENSE", "PunPlayer/UI/PunPunCompanionView.swift", "NOTICE.md", "CONTRIBUTING.md", "SECURITY.md", "PunPlayer/UI/AlbumTracklistSheet.swift",
+    "CHANGELOG.md", "docs/UI_VALIDATION_0.0.4.md", "docs/UI_VALIDATION_0.0.5.md", "docs/UI_VALIDATION_0.1.md",
     ".github/workflows/build-ipa.yml",
     ".github/ISSUE_TEMPLATE/bug_report.yml",
     ".github/ISSUE_TEMPLATE/feature_request.yml",

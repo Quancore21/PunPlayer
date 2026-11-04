@@ -1,5 +1,5 @@
 //
-//  PunPlayer — Services/Stores.swift
+//  PunPlayer -- Services/Stores.swift
 //
 //  Observable stores for library, play statistics, user playlists and settings.
 //  Roles correspond to TimberX repositories/Room DAOs and Musicr providers.
@@ -29,8 +29,6 @@ final class LibraryStore: ObservableObject, RecoverableStorage {
     var storageName: String { "Library / song IDs" }
 
     private var index: [UUID: Song] = [:]
-    // A scan request that arrives during a scan must not be dropped. This is especially important
-    // when importing files while the launch-time scan is still running.
     private var rescanRequested = false
     private var pendingForceRefresh = false
     private var waveformPreloadTask: Task<Void, Never>?
@@ -49,15 +47,13 @@ final class LibraryStore: ObservableObject, RecoverableStorage {
         isReadOnly = store.isSavingBlocked || idMapStore.isSavingBlocked
     }
 
-    /// A blocked store is shown by the persistent banner; a failed write is shown as an alert.
     private func persist() {
         let result = store.trySave(songs)
         refreshReadOnlyState()
         if let message = result.message { storageIssue = message }
     }
 
-    private func persistIDMap()
-                scheduleWaveformPreload(for: result) {
+    private func persistIDMap() {
         let result = idMapStore.trySave(idMap)
         refreshReadOnlyState()
         if let message = result.message { storageIssue = message }
@@ -65,6 +61,14 @@ final class LibraryStore: ObservableObject, RecoverableStorage {
 
     private func refreshReadOnlyState() {
         isReadOnly = store.isSavingBlocked || idMapStore.isSavingBlocked
+    }
+
+    private func scheduleWaveformPreload(for tracks: [Song]) {
+        waveformPreloadTask?.cancel()
+        guard !tracks.isEmpty else { return }
+        waveformPreloadTask = Task.detached(priority: .background) {
+            await WaveformCache.shared.preload(songs: tracks)
+        }
     }
 
     func retryStorage() {
@@ -80,20 +84,17 @@ final class LibraryStore: ObservableObject, RecoverableStorage {
         }
         switch idMapStore.retry() {
         case .notBlocked:
-            // Also retries transient write failures that did not block the store.
             persistIDMap()
-                scheduleWaveformPreload(for: result)
         case .recovered(let onDisk):
             if let onDisk { idMap = onDisk }
-            else { persistIDMap()
-                scheduleWaveformPreload(for: result) }
+            else { persistIDMap() }
         case .stillBlocked(let message):
             messages.append(message)
         }
         refreshReadOnlyState()
         storageIssue = messages.first ?? store.issue ?? idMapStore.issue
         if !isReadOnly {
-            Task { await scan() }   // bring the recovered files in line with the filesystem
+            Task { await scan() }
         }
     }
 
@@ -111,7 +112,6 @@ final class LibraryStore: ObservableObject, RecoverableStorage {
         if didReset {
             persist()
             persistIDMap()
-                scheduleWaveformPreload(for: result)
             if !isReadOnly { storageIssue = nil }
         }
     }
@@ -124,14 +124,6 @@ final class LibraryStore: ObservableObject, RecoverableStorage {
 
     func song(id: UUID) -> Song? { index[id] }
 
-    private func scheduleWaveformPreload(for tracks: [Song]) {
-        waveformPreloadTask?.cancel()
-        guard !tracks.isEmpty else { return }
-        waveformPreloadTask = Task.detached(priority: .background) {
-            await WaveformCache.shared.preload(songs: tracks)
-        }
-    }
-
     private func apply(_ newSongs: [Song]) {
         let sorted = newSongs.sorted(by: LibraryGrouping.titleOrder)
         songs = sorted
@@ -142,7 +134,6 @@ final class LibraryStore: ObservableObject, RecoverableStorage {
         index = Dictionary(sorted.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
     }
 
-    /// `forceRefresh` re-reads the tags and cover of every file, not only of those that changed.
     @MainActor
     func scan(forceRefresh: Bool = false) async {
         if isScanning {
@@ -168,19 +159,15 @@ final class LibraryStore: ObservableObject, RecoverableStorage {
                 apply(result)
                 ArtworkStore.shared.prune(keeping: Set(result.compactMap(\.artworkKey)))
                 persist()
-                // Remember every ID so references survive library loss or a file returning later.
                 idMap.record(result)
                 persistIDMap()
                 scheduleWaveformPreload(for: result)
             case .incomplete(let errors):
-                // Part of the folder could not be read. Do not treat invisible files as deleted.
                 let shown = errors.prefix(3).joined(separator: "; ")
                 let more = errors.count > 3 ? " (+\(errors.count - 3) more)" : ""
                 storageIssue = "The scan could not read everything: \(shown)\(more). Your library was left unchanged."
             }
 
-            // Calls made while awaiting the detached scan set these flags. Run the requested scan
-            // before clearing isScanning so an import that raced with startup is discovered.
             if rescanRequested {
                 forceThisPass = pendingForceRefresh
                 continue
@@ -190,7 +177,6 @@ final class LibraryStore: ObservableObject, RecoverableStorage {
         }
     }
 
-    /// Copies the picked files into Documents/Imported, keeps the result for the user, then rescans.
     @MainActor
     func importFiles(_ urls: [URL]) async {
         let target = AppPaths.documents.appendingPathComponent("Imported", isDirectory: true)
@@ -201,7 +187,6 @@ final class LibraryStore: ObservableObject, RecoverableStorage {
         await scan()
     }
 
-    /// The system file picker itself failed (not the same as the user cancelling it).
     @MainActor
     func reportImportFailure(_ error: Error) {
         if (error as? CocoaError)?.code == .userCancelled { return }
@@ -228,7 +213,6 @@ final class StatsStore: ObservableObject, RecoverableStorage {
         isReadOnly = store.isSavingBlocked
     }
 
-    /// Automatic (every finished play): no alert per song while saving is paused, the banner says it.
     func recordPlay(of id: UUID) {
         stats.recordPlay(of: id)
         save(userInitiated: false)
@@ -244,7 +228,6 @@ final class StatsStore: ObservableObject, RecoverableStorage {
         save(userInitiated: true)
     }
 
-    /// Statistics entries of songs that are not in the library (kept on purpose, see Settings).
     func missingCount(validIds: Set<UUID>) -> Int { stats.missingCount(notIn: validIds) }
 
     @discardableResult
@@ -282,8 +265,6 @@ final class StatsStore: ObservableObject, RecoverableStorage {
         store.clearIssue()
     }
 
-    /// A change that was not stored is never silent: a failed write always alerts, a paused store
-    /// alerts when the user caused the change and is otherwise shown by the banner.
     private func save(userInitiated: Bool) {
         let result = store.trySave(stats)
         if isReadOnly != store.isSavingBlocked { isReadOnly = store.isSavingBlocked }
@@ -342,7 +323,6 @@ final class PlaylistStore: ObservableObject, RecoverableStorage {
         playlists.first { $0.id == id }
     }
 
-    /// Entries that point at songs which are not in the library (kept on purpose, see Settings).
     func missingCount(validIds: Set<UUID>) -> Int {
         MissingReferences.count(in: playlists, notIn: validIds)
     }
@@ -389,7 +369,6 @@ final class PlaylistStore: ObservableObject, RecoverableStorage {
         save()
     }
 
-    /// Every playlist change is made by the user, so a change that was not stored always alerts.
     private func save() {
         let result = store.trySave(playlists)
         if isReadOnly != store.isSavingBlocked { isReadOnly = store.isSavingBlocked }
@@ -421,7 +400,6 @@ final class SettingsStore: ObservableObject {
         didSet { UserDefaults.standard.set(language.rawValue, forKey: AppLocalization.preferenceKey) }
     }
 
-    /// The home guide is only a hint. Turning it off never disables the edge gestures themselves.
     @Published var showPunPun: Bool {
         didSet { UserDefaults.standard.set(showPunPun, forKey: Self.showPunPunKey) }
     }
@@ -438,8 +416,6 @@ final class SettingsStore: ObservableObject {
         }
     }
 
-    /// Unreadable stored settings fall back to defaults. Nothing is written back until the user
-    /// actually changes a setting, so the old value is not destroyed by merely launching.
     init() {
         appearance = PunAppearance(rawValue: UserDefaults.standard.string(forKey: Self.appearanceKey) ?? "dark") ?? .dark
         appIcon = PunAppIcon(rawValue: UserDefaults.standard.string(forKey: Self.appIconKey) ?? "liquidGlass") ?? .liquidGlass

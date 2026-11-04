@@ -6,7 +6,7 @@
 
 <p align="center">
   <b>A fast, private, artwork-first local music player for iPhone.</b><br>
-  Built with Swift & SwiftUI · Zero tracking · Pure local audio · GNU GPLv3
+  Built with Swift &amp; SwiftUI &middot; Zero tracking &middot; Pure local audio &middot; GNU GPLv3 &middot; <b>0.1 Beta</b>
 </p>
 
 <p align="center">
@@ -18,7 +18,7 @@
 
 ---
 
-## 🎵 Why PunPlayer?
+## Why PunPlayer?
 
 In an era of monthly streaming subscriptions, algorithmic feeds, and cloud-locked libraries, **PunPlayer** is built for those who treasure owning their music collection.
 
@@ -28,33 +28,35 @@ Drop your albums into the Files app, import via AirDrop, or pick documents from 
 
 ---
 
-## ✨ Features & Highlights
+## Features & Highlights (0.1 Beta)
 
-### 🪐 Signature 3D Orbit Transport
-The Play/Pause button is a tribute to celestial mechanics and the PunPlayer mark. When tapped, an amber satellite swings into orbit around a central dark planet, passes behind it in 3D perspective, emerges along the diagonal axis, and settles into the new transport state. Playback starts or pauses **instantaneously** on touch — the animation is purely visual and never delays audio.
+### Liquid Glass & Classic App Icons
+Crafted from the Apple Icon Composer specification with translucent amber glass, an inner-specular dark planet, and a warm cream gradient. Switch freely between **Liquid Glass** (default) and **Classic** anytime in **Settings -> Personalization -> App icon**.
 
-### 📊 Real Decoded Waveforms
-No fake randomized sine waves or decorative pulsing bars. PunPlayer decodes the genuine PCM audio signal using `AVAudioFile` into precise amplitude buckets, cached atomically by file fingerprint for seamless seek navigation and continuous visual scrubbing.
+### PunPun Interactive Mascot Companion
+Meet **PunPun** -- an optional interactive mascot who lives right inside the player and mini-player (enable in **Settings -> PunPun**):
+- **Rhythm-Aware Dance:** Driven by `WaveformRhythmAnalyzer`, PunPun reads local RMS energy and onset flux from the decoded audio signal to sway calmly during quiet passages and groove during upbeat choruses.
+- **Sleep & Tap Reactions:** Curls up to nap when playback is paused, and shows his happy love pose with floating hearts and soft haptics when tapped.
+- **Animated Mini-Faces:** Expressive mini-badges in the mini-player and Settings that blink, wink, and smile.
 
-### 🖐️ Gesture-Driven Navigation (No Jitter)
-- **Swipe ← from right screen edge:** The current album’s tracklist slides in as a sleek trailing drawer matching your gesture direction.
-- **Swipe ↑ from bottom edge or anywhere on the screen:** The Track Actions sheet pops up effortlessly without fighting the iOS Home Indicator.
-- **Fixed, non-scrolling player viewport:** Gestures never cause the album artwork or transport buttons to jitter or scroll off-screen.
+### Signature 3D Orbit Transport
+The Play/Pause button is a tribute to celestial mechanics and the PunPlayer mark. When tapped, an amber satellite swings into orbit around a central dark planet, passes behind it in 3D perspective, emerges along the diagonal axis, and settles into the new transport state. Playback starts or pauses **instantaneously** on touch.
 
-### 📝 Synced LRC Lyrics
-Follow along with karaoke-style synchronized scrolling lyrics from embedded audio tags or adjacent `.lrc` files.
+### Real Decoded Waveforms with Background Preloading
+No fake randomized sine waves. PunPlayer decodes the genuine PCM audio signal using `AVAudioFile` into precise amplitude buckets, preloaded in the background and cached atomically by file fingerprint for instant seek navigation.
 
-### 🎛️ Complete Library & Queue Management
-- **Full library sorting:** Tracks, Albums, Artists, Genres, Folders, and Playlists.
-- **Queue control:** Drag-and-drop reordering, shuffle with history weighting, and smart repeat modes.
-- **Smart & Personal Playlists:** Custom playlists, Most Played, Recently Added, and History with standard `.m3u` export.
-- **System integration:** Background audio playback, Lock Screen media controls with full artwork, Control Center support, and headphone remote handling.
+### Gesture-Driven Navigation & Dynamic Island Clearance
+- **Swipe left from right screen edge:** The current album tracklist slides in as a sleek trailing drawer positioned cleanly below the Dynamic Island and status bar.
+- **Swipe up from bottom edge or anywhere on the screen:** The Track Actions sheet pops up effortlessly without fighting the iOS Home Indicator.
+
+### Synced LRC Lyrics & Complete Library Management
+- **Karaoke-style synced `.lrc` lyrics** with auto-scrolling.
+- **Full library sorting:** Tracks, Albums, Artists, Genres, Folders, Smart Playlists, and Personal Playlists with `.m3u` export.
+- **System integration:** Background audio playback, Lock Screen media controls, Control Center, and headphone remote handling.
 
 ---
 
-## 🎧 Audio Format Support
-
-PunPlayer plays every format decoded natively by Apple's Core Audio / AVFoundation engine:
+## Audio Format Support
 
 | Format | Container / Extension | Quality |
 |---|---|---|
@@ -66,43 +68,38 @@ PunPlayer plays every format decoded natively by Apple's Core Audio / AVFoundati
 
 ---
 
-## 🛠️ Architecture & Under the Hood
-
-For developers and audio enthusiasts interested in how PunPlayer is structured:
+## Architecture & Under the Hood
 
 ```
 PunPlayer/
-├── Core/             # Platform-independent models, pure logic, and algorithmic engine
-│   ├── PlayQueue.swift          # Resilient queue, shuffle states & history tracking
-│   ├── PlaybackSupport.swift    # Pure state resolvers (SeekRequestGate, EdgeSwipeResolver)
-│   ├── Lyrics.swift             # Timestamped LRC lyrics parser & synchronizer
-│   ├── LibraryGrouping.swift    # Stable multi-artist album ordering & folder trees
-│   └── M3UWriter.swift          # Standard playlist serialization
-├── Playback/         # AVPlayer wrapper, audio sessions & lock screen metadata
-│   ├── PlayerEngine.swift       # Audio engine, session interruptions, remote commands
-│   └── PlaybackClock.swift      # High-precision time observation and seek gating
-├── Services/         # Background storage, file import, waveform decoding
-│   ├── WaveformCache.swift      # Background actor for multi-channel PCM decoding & cache
-│   ├── ArtworkStore.swift       # Memory/disk cache for embedded cover images
-│   └── LibraryStore.swift       # Local metadata indexing and persistence
-├── UI/               # Pure declarative SwiftUI interface
-│   ├── NowPlayingView.swift     # Full-screen adaptive player with zero-clipping layout
-│   ├── OrbitPlayPauseButton.swift # 5-frame 3D orbit button animation
-│   ├── WaveformProgressVisual.swift # Custom Canvas/Path waveform seek bar
-│   ├── AlbumTracklistSheet.swift  # Trailing slide-over album track drawer
-│   └── RootView.swift           # NavigationStack root with embedded MiniPlayer
-└── Tests/            # Unit tests running platform-independent logic
-    └── PunCoreTests/            # Automated tests for queue, edge swipes, seek gate, LRC
++-- Core/             # Platform-independent models, pure logic, and algorithmic engine
+|   +-- PlayQueue.swift          # Resilient queue, shuffle states & history tracking
+|   +-- PlaybackSupport.swift    # Pure state resolvers (SeekRequestGate, EdgeSwipeResolver)
+|   +-- Lyrics.swift             # Timestamped LRC lyrics parser & synchronizer
+|   +-- Song.swift               # Stable multi-artist album ordering & folder trees
+|   \-- M3UWriter.swift          # Standard playlist serialization
++-- Playback/         # AVPlayer wrapper, audio sessions & lock screen metadata
+|   +-- PlayerEngine.swift       # Audio engine, session interruptions, remote commands
+|   \-- PlaybackErrorMapper.swift # AVFoundation / CoreAudio error classification
++-- Services/         # Background storage, file import, waveform decoding
+|   +-- WaveformCache.swift      # Background actor for multi-channel PCM decoding & preload
+|   +-- ArtworkStore.swift       # Memory/disk cache for embedded cover images
+|   \-- Stores.swift             # Library, statistics, playlists, and settings stores
++-- UI/               # Pure declarative SwiftUI interface
+|   +-- NowPlayingView.swift     # Full-screen adaptive player with zero-clipping layout
+|   +-- PunPunCompanionView.swift # Rhythm-aware mascot companion & animated mini-faces
+|   +-- OrbitPlayPauseButton.swift # 5-frame 3D orbit button animation
+|   +-- WaveformProgressVisual.swift # Custom waveform seek bar
+|   +-- AlbumTracklistSheet.swift  # Trailing slide-over album track drawer
+|   +-- ScreenMetrics.swift      # Hardware safe-area and player geometry cache
+|   \-- RootView.swift           # NavigationStack root with embedded MiniPlayer
+\-- Tests/            # Unit tests running platform-independent logic
+    \-- PunCoreTests/            # Automated tests for queue, edge swipes, seek gate, LRC
 ```
-
-- **Zero Third-Party Dependencies:** 100% native Swift 5 and SwiftUI. Builds cleanly with Xcode and XcodeGen without CocoaPods, Carthage, or external SPM packages.
-- **Headless Unit Testing:** Core modules are packaged as a pure Swift package (`PunCore`), allowing instant test runs on macOS or Linux CLI via `swift test` without needing an iOS Simulator.
-- **Race-Free Seeking:** Custom `SeekRequestGate` ensures fast seek actions never get overwritten by stale periodic ticks from AVPlayer.
-- **ProMotion Ready:** All custom springs and transitions are tuned for 120Hz ProMotion displays.
 
 ---
 
-## 📲 Installation
+## Installation
 
 ### Option 1: Sideloading (Recommended)
 1. Download the latest `PunPlayer-0.1.ipa` from [GitHub Releases](https://github.com/Quancore21/PunPlayer/releases).
@@ -111,23 +108,16 @@ PunPlayer/
 
 ### Option 2: Build with Xcode
 ```bash
-# Clone the repository
-git clone https://github.com/Quancore21/PunPlayer.git
+git clone [https://github.com/Quancore21/PunPlayer.git](https://github.com/Quancore21/PunPlayer.git)
 cd PunPlayer
-
-# Run platform-independent unit tests
 swift test
-
-# Generate Xcode project (requires XcodeGen: brew install xcodegen)
 xcodegen generate
-
-# Open and build in Xcode
 open PunPlayer.xcodeproj
 ```
 
 ---
 
-## 📜 License & Provenance
+## License & Provenance
 
 PunPlayer is licensed under the **GNU General Public License v3.0 (GPLv3)**. See [LICENSE](LICENSE) for the full text.
 

@@ -82,7 +82,7 @@ jobs:
           name: build-log
           path: build.log
 
-  # Tag "v0.0.5" -> GitHub Release with the IPA attached (only if tests and build are green).
+  # Tag "v0.1" -> GitHub Release with the IPA attached (only if tests and build are green).
   release:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: [core-tests, build-ipa]

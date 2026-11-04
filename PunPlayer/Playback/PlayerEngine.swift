@@ -442,6 +442,17 @@ final class PlayerEngine: ObservableObject, RecoverableStorage {
         clock.position = startAt
         clock.duration = song.duration
         lyrics = LyricsLoader.load(for: song)
+        if lyrics == nil {
+            let expectedGeneration = loadGeneration
+            let audioURL = AppPaths.fileURL(for: song)
+            Task { [weak self] in
+                guard let embedded = await LyricsLoader.loadEmbedded(from: audioURL) else { return }
+                await MainActor.run {
+                    guard let self, self.loadGeneration == expectedGeneration, self.lyrics == nil else { return }
+                    self.lyrics = embedded
+                }
+            }
+        }
 
         let url = AppPaths.fileURL(for: song)
         guard FileManager.default.fileExists(atPath: url.path) else {
@@ -741,22 +752,21 @@ enum LyricsLoader {
     static func load(for song: Song) -> SynchronizedLyrics? {
         let audio = AppPaths.fileURL(for: song)
         let base = audio.deletingPathExtension()
-        let candidates = [
-            base.appendingPathExtension("lrc"),
-            base.appendingPathExtension("LRC")
-        ]
-        for sidecar in candidates {
+        for ext in ["lrc", "LRC"] {
+            let sidecar = base.appendingPathExtension(ext)
             if let data = try? Data(contentsOf: sidecar) {
                 let text = String(data: data, encoding: .utf8) ?? String(decoding: data, as: UTF8.self)
                 if let parsed = SynchronizedLyrics(lrc: text) { return parsed }
             }
         }
-        // Fallback: check embedded LRC tags inside the audio container
-        let asset = AVURLAsset(url: audio)
-        if let embedded = asset.lyrics, let parsed = SynchronizedLyrics(lrc: embedded) {
-            return parsed
-        }
         return nil
+    }
+
+    static func loadEmbedded(from url: URL) async -> SynchronizedLyrics? {
+        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+        let asset = AVURLAsset(url: url)
+        guard let raw = try? await asset.load(.lyrics), !raw.isEmpty else { return nil }
+        return SynchronizedLyrics(lrc: raw)
     }
 }
 

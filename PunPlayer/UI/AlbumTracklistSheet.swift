@@ -1,5 +1,5 @@
 //
-//  PunPlayer вЂ” UI/AlbumTracklistSheet.swift
+//  PunPlayer -- UI/AlbumTracklistSheet.swift
 //  Lets listeners switch tracks in the current album without leaving the player.
 //  PunPlayer is licensed under GPLv3.
 //
@@ -68,52 +68,62 @@ struct AlbumTracklistSheet: View {
 
             Divider().overlay(Pun.separator.opacity(0.55))
 
-            List {
-                Section {
-                    HStack(spacing: 14) {
-                        ArtworkView(key: currentSong.artworkKey, seed: currentSong.album, size: 64, corner: 12)
-                        VStack(alignment: .leading, spacing: 5) {
-                            Text(currentSong.album)
-                                .font(Pun.title(.title3))
-                                .foregroundStyle(Pun.text)
-                                .lineLimit(2)
-                            Text(currentSong.artist)
-                                .font(Pun.body(.medium))
-                                .foregroundStyle(Pun.textDim)
-                                .lineLimit(1)
-                            Text(AppLocalization.count(tracks.count, noun: "track"))
-                                .font(Pun.caption())
-                                .foregroundStyle(Pun.mango)
+            ScrollViewReader { proxy in
+                List {
+                    Section {
+                        HStack(spacing: 14) {
+                            ArtworkView(key: currentSong.artworkKey, seed: currentSong.album, size: 64, corner: 12)
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text(currentSong.album)
+                                    .font(Pun.title(.title3))
+                                    .foregroundStyle(Pun.text)
+                                    .lineLimit(2)
+                                Text(currentSong.artist)
+                                    .font(Pun.body(.medium))
+                                    .foregroundStyle(Pun.textDim)
+                                    .lineLimit(1)
+                                Text(AppLocalization.count(tracks.count, noun: "track"))
+                                    .font(Pun.caption())
+                                    .foregroundStyle(Pun.mango)
+                            }
+                        }
+                        .padding(.vertical, 6)
+                        .listRowBackground(Color.clear)
+                    }
+
+                    Section("Tracks") {
+                        ForEach(Array(tracks.enumerated()), id: \.element.id) { index, song in
+                            Button {
+                                // Rebuild playback around this album so next/previous stay in its tracklist.
+                                player.play(songs: tracks, start: song, title: currentSong.album)
+                                closeSheet()
+                            } label: {
+                                HStack(spacing: 11) {
+                                    Text(song.trackNumber > 0 ? String(format: "%02d", song.trackNumber) : String(format: "%02d", index + 1))
+                                        .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                                        .foregroundStyle(player.currentSong?.id == song.id ? Pun.mango : Pun.textDim)
+                                        .frame(width: 23, alignment: .trailing)
+                                    SongRow(song: song, isCurrent: player.currentSong?.id == song.id)
+                                }
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .modifier(SongMenu(song: song))
+                            .listRowBackground(Color.clear)
+                            .id(song.id)
                         }
                     }
-                    .padding(.vertical, 6)
-                    .listRowBackground(Color.clear)
                 }
-
-                Section("Tracks") {
-                    ForEach(Array(tracks.enumerated()), id: \.element.id) { index, song in
-                        Button {
-                            // Rebuild playback around this album so next/previous stay in its tracklist.
-                            player.play(songs: tracks, start: song, title: currentSong.album)
-                            closeSheet()
-                        } label: {
-                            HStack(spacing: 11) {
-                                Text(song.trackNumber > 0 ? String(format: "%02d", song.trackNumber) : String(format: "%02d", index + 1))
-                                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                                    .foregroundStyle(player.currentSong?.id == song.id ? Pun.mango : Pun.textDim)
-                                    .frame(width: 23, alignment: .trailing)
-                                SongRow(song: song, isCurrent: player.currentSong?.id == song.id)
-                            }
-                            .contentShape(Rectangle())
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+                .onAppear {
+                    if let activeID = player.currentSong?.id {
+                        DispatchQueue.main.async {
+                            proxy.scrollTo(activeID, anchor: .center)
                         }
-                        .buttonStyle(.plain)
-                        .modifier(SongMenu(song: song))
-                        .listRowBackground(Color.clear)
                     }
                 }
             }
-            .listStyle(.plain)
-            .scrollContentBackground(.hidden)
         }
         .background(AppBackground())
     }

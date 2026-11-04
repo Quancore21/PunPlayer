@@ -171,6 +171,7 @@ struct PunPunCompanionView: View {
                 waveform = []
                 return
             }
+            waveform = []
             let loaded = await WaveformCache.shared.waveform(for: song)
             guard !Task.isCancelled else { return }
             waveform = loaded
@@ -278,7 +279,7 @@ struct PunPunMiniFaceView: View {
     ]
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: reduceMotion ? 0.5 : 0.15, paused: false)) { timeline in
+        TimelineView(.animation(minimumInterval: reduceMotion ? 0.6 : (isPlaying ? 0.15 : 0.45), paused: false)) { timeline in
             let now = timeline.date.timeIntervalSinceReferenceDate
             let isTapped = timeline.date < tapWinkUntil
             let face = pickFace(now: now, isTapped: isTapped)

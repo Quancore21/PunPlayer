@@ -230,11 +230,14 @@ struct NowPlayingView: View {
                                 width: Double(size.width),
                                 height: Double(size.height)
                             )
+                            drawerAnimationToken += 1
+                            let currentToken = drawerAnimationToken
                             if action == .albumTracklist || value.translation.width < -40 || value.predictedEndTranslation.width < -80 {
                                 withAnimation(.spring(response: 0.30, dampingFraction: 0.84)) {
                                     drawerDragOffset = -drawerWidth
                                 }
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.31) {
+                                    guard self.drawerAnimationToken == currentToken else { return }
                                     showTracklistDrawer = true
                                     isDraggingOpen = false
                                     drawerDragOffset = 0
@@ -244,6 +247,7 @@ struct NowPlayingView: View {
                                     drawerDragOffset = 0
                                 }
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.29) {
+                                    guard self.drawerAnimationToken == currentToken else { return }
                                     isDraggingOpen = false
                                     drawerDragOffset = 0
                                 }

@@ -107,6 +107,7 @@ struct AlbumTracklistSheet: View {
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
+                        .modifier(SongMenu(song: song))
                         .listRowBackground(Color.clear)
                     }
                 }

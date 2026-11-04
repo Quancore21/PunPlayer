@@ -170,6 +170,16 @@ private struct HomeView: View {
             .frame(maxWidth: 620)
             .frame(maxWidth: .infinity)
         }
+        .overlay(alignment: .top) {
+            LinearGradient(
+                colors: [Pun.ink, Pun.ink.opacity(0.82), Pun.ink.opacity(0)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(height: ScreenMetrics.shared.topSafeArea + 10)
+            .ignoresSafeArea(edges: .top)
+            .allowsHitTesting(false)
+        }
         .background(AppBackground())
         .toolbar(.hidden, for: .navigationBar)
         .musicImporter(isPresented: $showImporter)
@@ -369,7 +379,7 @@ private struct HomeView: View {
     }
 
     private var recentlyAdded: some View {
-        let songs = Array(library.songs.sorted { $0.dateAdded > $1.dateAdded }.prefix(3))
+        let songs = Array(library.songs.sorted { $0.dateAdded == $1.dateAdded ? LibraryGrouping.titleThenPath($0, $1) : $0.dateAdded > $1.dateAdded }.prefix(3))
         return VStack(alignment: .leading, spacing: 12) {
             HStack {
                 SectionHeading(title: "Recently added", detail: nil)
@@ -395,6 +405,7 @@ private struct HomeView: View {
                             .padding(.vertical, 7)
                     }
                     .buttonStyle(.plain)
+                    .modifier(SongMenu(song: song))
                     if song.id != songs.last?.id {
                         Divider().overlay(Pun.separator).padding(.leading, 60)
                     }

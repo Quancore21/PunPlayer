@@ -194,6 +194,11 @@ final class PlayerEngine: ObservableObject, RecoverableStorage {
     func pause() {
         intent.userPaused()
         player.pause()
+        if !seekGate.isPending {
+            let current = player.currentTime().seconds
+            if current.isFinite, current >= 0 { clock.position = current }
+        }
+        updateNowPlaying()
         persist(force: true)
     }
 
@@ -735,10 +740,23 @@ final class PlayerEngine: ObservableObject, RecoverableStorage {
 enum LyricsLoader {
     static func load(for song: Song) -> SynchronizedLyrics? {
         let audio = AppPaths.fileURL(for: song)
-        let sidecar = audio.deletingPathExtension().appendingPathExtension("lrc")
-        guard let data = try? Data(contentsOf: sidecar) else { return nil }
-        let text = String(data: data, encoding: .utf8) ?? String(decoding: data, as: UTF8.self)
-        return SynchronizedLyrics(lrc: text)
+        let base = audio.deletingPathExtension()
+        let candidates = [
+            base.appendingPathExtension("lrc"),
+            base.appendingPathExtension("LRC")
+        ]
+        for sidecar in candidates {
+            if let data = try? Data(contentsOf: sidecar) {
+                let text = String(data: data, encoding: .utf8) ?? String(decoding: data, as: UTF8.self)
+                if let parsed = SynchronizedLyrics(lrc: text) { return parsed }
+            }
+        }
+        // Fallback: check embedded LRC tags inside the audio container
+        let asset = AVURLAsset(url: audio)
+        if let embedded = asset.lyrics, let parsed = SynchronizedLyrics(lrc: embedded) {
+            return parsed
+        }
+        return nil
     }
 }
 

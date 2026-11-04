@@ -7,7 +7,15 @@
 - **PunPun Mascot Companion & Animated Mini-Faces:** integrated the 16-pose PunPun sprite sheet and 4 expressive mini-faces with native alpha transparency, uniform scale alignment, and a dedicated `PunPun` section in Settings (disabled by default)
 - **Waveform Rhythm Analyzer:** PunPun analyzes a local Gaussian window of RMS energy and onset flux from decoded waveforms for calm, natural dance pacing, sleeping on pause, and love/heart reactions on tap
 - **Background Waveform Preloading:** `LibraryStore` now schedules low-priority background waveform decoding via `WaveformCache.shared.preload` so tracks show their waveform immediately when opened
-- **Dynamic Island & Notch Safe-Area Clearance:** `AlbumTracklistSheet` now uses a dedicated header bar and floats cleanly below the Dynamic Island and status bar clock, with full Russian pluralization support
+- **Full Russian & English Pluralization:** fixed counter pluralization across Home, Library, Artists, and Settings (`34 tracks`, `1 album`, `2 albums`)
+- **Home Status Bar Scroll Shield & Context Menus:** added a top status-bar gradient shield on `HomeView` so scrolled cards never collide with the system clock, plus deterministic sorting and long-press menus on `Recently added` and `Album tracks`
+- **Case-Insensitive & Embedded LRC Lyrics:** `LyricsLoader` now supports both `.lrc` and `.LRC` sidecars as well as embedded LRC lyrics tags, and syncs exact Lock Screen elapsed time on pause
+
+## 0.0.9
+
+- Dynamic Island & Notch safe-area clearance: `ScreenMetrics` now caches hardware-accurate top and bottom safe-area bounds so the player header and Album Tracklist Drawer never overlap the Dynamic Island, notch, status bar clock, or Home Indicator
+- Dedicated Album Tracklist Drawer header: replaced the suppressed nested NavigationStack bar with an explicit header bar (`Album tracks` + `Done` button)
+- Fixed Russian pluralization for album track counts (`track` noun support in `AppLocalization.count`) and added missing localization keys (`Repeat one`, `Language`, `Version`)
 
 ## 0.0.8
 

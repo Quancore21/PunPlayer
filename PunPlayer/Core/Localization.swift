@@ -1,5 +1,5 @@
 //
-// PunPlayer — Core/Localization.swift
+// PunPlayer -- Core/Localization.swift
 // Lightweight runtime localization for plain strings produced outside SwiftUI.
 // SwiftUI Text literals additionally use the environment's Locale.
 // Licensed under GPLv3.
@@ -43,8 +43,6 @@ enum AppLocalization {
         let localized = selectedBundle.localizedString(forKey: key, value: nil, table: "Localizable")
         if localized != key { return localized }
 
-        // Keep core-generated summaries localized even in the SwiftPM test target, where the
-        // app's .lproj resource bundles are intentionally not loaded.
         if isRussian {
             switch key {
             case "import.summary.imported": return "Импортировано"
@@ -57,7 +55,34 @@ enum AppLocalization {
     }
 
     static func format(_ key: String, defaultFormat: String, _ arguments: CVarArg...) -> String {
-        String(format: string(key, defaultValue: defaultFormat), locale: locale, arguments: arguments)
+        if let number = arguments.first as? Int, arguments.count == 1 {
+            switch key {
+            case "home.library.count":
+                return isRussian ? "\(count(number, noun: "track")) в медиатеке" : "\(count(number, noun: "track")) in your library"
+            case "home.playlists.count":
+                return count(number, noun: "personal playlist")
+            case "album.count":
+                return count(number, noun: "album")
+            case "playlist.count", "album.trackCount":
+                return count(number, noun: "track")
+            case "cleanup.removeEntries":
+                return isRussian ? "Удалить \(count(number, noun: "entry"))" : "Remove \(count(number, noun: "entry"))"
+            default:
+                break
+            }
+        }
+        return String(format: string(key, defaultValue: defaultFormat), locale: locale, arguments: arguments)
+    }
+
+    private static func russianForm(for count: Int) -> Int {
+        let value = abs(count)
+        let lastTwo = value % 100
+        if (11...14).contains(lastTwo) { return 2 }
+        switch value % 10 {
+        case 1: return 0
+        case 2...4: return 1
+        default: return 2
+        }
     }
 
     /// Language-aware short counts, including the three common Russian plural forms.
@@ -67,6 +92,9 @@ enum AppLocalization {
             switch noun {
             case "song": english = ("song", "songs")
             case "track": english = ("track", "tracks")
+            case "album": english = ("album", "albums")
+            case "personal playlist": english = ("personal playlist", "personal playlists")
+            case "entry": english = ("entry", "entries")
             case "lyrics file": english = ("lyrics file", "lyrics files")
             case "file": english = ("file", "files")
             case "minute": english = ("min", "min")
@@ -75,21 +103,13 @@ enum AppLocalization {
             return "\(count) \(count == 1 ? english.0 : english.1)"
         }
 
-        let value = abs(count)
-        let lastTwo = value % 100
-        let form: Int
-        if (11...14).contains(lastTwo) {
-            form = 2
-        } else {
-            switch value % 10 {
-            case 1: form = 0
-            case 2...4: form = 1
-            default: form = 2
-            }
-        }
+        let form = russianForm(for: count)
         let word: String
         switch noun {
         case "song", "track": word = ["трек", "трека", "треков"][form]
+        case "album": word = ["альбом", "альбома", "альбомов"][form]
+        case "personal playlist": word = ["личный плейлист", "личных плейлиста", "личных плейлистов"][form]
+        case "entry": word = ["запись", "записи", "записей"][form]
         case "lyrics file": word = ["файл с текстом", "файла с текстом", "файлов с текстом"][form]
         case "file": word = ["файл", "файла", "файлов"][form]
         case "minute": word = "мин"

@@ -617,7 +617,7 @@ private struct TrackActionsSheet: View {
                     symbol: repeatMode == .one ? "repeat.1" : "repeat",
                     title: repeatTitle,
                     detail: "Change repeat mode",
-                    trailing: nil,
+                    trailing: repeatMode != .off ? "checkmark" : nil,
                     action: onCycleRepeat
                 )
             }

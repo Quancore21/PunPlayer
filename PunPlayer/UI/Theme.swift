@@ -177,12 +177,27 @@ struct AppBackground: View {
     }
 }
 
+private struct MiniPlayerScrollClearance: ViewModifier {
+    @EnvironmentObject private var player: PlayerEngine
+
+    func body(content: Content) -> some View {
+        content.safeAreaInset(edge: .bottom, spacing: 0) {
+            if player.currentSong != nil {
+                Color.clear
+                    .frame(height: 92)
+                    .allowsHitTesting(false)
+            }
+        }
+    }
+}
+
 extension View {
-    /// Applies the app background and theme-aware navigation chrome to a screen.
+    /// Applies the app background, scroll-behind mini-player clearance, and navigation chrome.
     func punScreen() -> some View {
         self
             .scrollContentBackground(.hidden)
             .background(AppBackground())
+            .modifier(MiniPlayerScrollClearance())
             .toolbarBackground(.hidden, for: .navigationBar)
             .toolbar(.visible, for: .navigationBar)
             .tint(Pun.mango)

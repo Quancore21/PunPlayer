@@ -11,10 +11,9 @@ struct SettingsView: View {
     @EnvironmentObject private var stats: StatsStore
     @EnvironmentObject private var settings: SettingsStore
     @EnvironmentObject private var playlists: PlaylistStore
-    @EnvironmentObject private var player: PlayerEngine
 
     private var appVersion: String {
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.1.1"
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.1.2"
     }
     @State private var showImporter = false
     @State private var showCleanupConfirm = false
@@ -171,7 +170,6 @@ struct SettingsView: View {
             .listRowBackground(Pun.surface)
         }
         .listStyle(.insetGrouped)
-        .padding(.bottom, player.currentSong != nil ? 96 : 0)
         .foregroundStyle(Pun.text)
         .navigationTitle("Settings")
         .navigationBarTitleDisplayMode(.large)
@@ -197,7 +195,7 @@ struct AboutView: View {
     @EnvironmentObject private var settings: SettingsStore
 
     private var appVersion: String {
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.1.1"
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.1.2"
     }
 
     var body: some View {
@@ -253,9 +251,9 @@ struct AboutView: View {
             .listRowBackground(Pun.surface)
         }
         .listStyle(.insetGrouped)
-        .scrollContentBackground(.hidden)
-        .background(AppBackground())
+        .foregroundStyle(Pun.text)
         .navigationTitle("About")
         .navigationBarTitleDisplayMode(.inline)
+        .punScreen()
     }
 }

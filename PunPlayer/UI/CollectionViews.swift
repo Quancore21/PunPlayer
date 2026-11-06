@@ -154,7 +154,6 @@ struct LibraryView: View {
                 content
             }
         }
-        .padding(.bottom, player.currentSong != nil ? 74 : 0)
         .navigationTitle("Library")
         .navigationBarTitleDisplayMode(.large)
         .punScreen()

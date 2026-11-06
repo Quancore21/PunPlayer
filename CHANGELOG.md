@@ -1,11 +1,15 @@
 # Changelog
 
-## 0.1.1 -- Beta
+## 0.1.2 -- Beta
 
-- **Rhythm-Locked Mascot Kinematics:** PunPun now dances at full musical tempo (2.8 to 4.6 steps/sec) with song-normalized dynamic range and clean squash-and-stretch beat bounces
-- **Full-Sized Tap Reaction:** boosted tap scale by 1.16x with high spring pop so the heart pose is big and happy
-- **Interactive MiniPlayer Drag-Up Gesture:** pull upward from the mini-player card to dynamically scale, glow, and open the full player with haptic feedback
-- **Bottom Scroll Clearance & Dedicated About Screen:** added 116pt bottom clearance so lists are never hidden behind the mini-player, and added a dedicated `AboutView` in Settings
+- **Fluid Interactive Mini-Player Expansion:** dragging upward (or tapping) on the mini-player now continuously expands the card to full screen, smoothly interpolating the album cover from 42pt on the left to centered full-player artwork while cross-fading into the `NowPlayingView` controls
+- **Linear De-Gamma Tempo & Dynamic Range Analyzer:** `WaveformRhythmAnalyzer` now recovers true linear acoustic energy (`pow(x, 1.613)`) and positive attack transients with 3-gear step-boundary hysteresis, keeping PunPun calm during slow intros and breakdowns (1.05 steps/sec) and energetic on fast beats (up to 3.65 steps/sec)
+- **True Scroll-Behind List Clearance:** replaced external list bottom padding with a transparent scroll-content inset in `.punScreen()`, eliminating the black cut-off bar above the mini-player across Settings, About, Library, Playlists, and Search
+- **Natural PunPun Hop-and-Wink Tap Reaction:** replaced the mismatched `punpun_love` sprite bloat with a crisp, anatomically consistent 0.85s hop-and-wink at natural 1.0x scale
+
+## 0.1.1 -- Pre-release
+
+- Added dedicated `AboutView` screen in Settings and initial mini-player drag gesture support
 
 
 ## 0.1 -- Beta

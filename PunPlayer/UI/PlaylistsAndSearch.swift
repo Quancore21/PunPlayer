@@ -71,7 +71,6 @@ struct PlaylistsView: View {
             .listRowBackground(Pun.surface)
         }
         .listStyle(.insetGrouped)
-        .padding(.bottom, player.currentSong != nil ? 74 : 0)
         .foregroundStyle(Pun.text)
         .navigationTitle("Playlists")
         .navigationBarTitleDisplayMode(.large)
@@ -210,7 +209,6 @@ struct SearchView: View {
                 results
             }
         }
-        .padding(.bottom, player.currentSong != nil ? 74 : 0)
         .navigationTitle("Search")
         .navigationBarTitleDisplayMode(.large)
         .punScreen()

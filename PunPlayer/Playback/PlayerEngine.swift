@@ -445,12 +445,10 @@ final class PlayerEngine: ObservableObject, RecoverableStorage {
         if lyrics == nil {
             let expectedGeneration = loadGeneration
             let audioURL = AppPaths.fileURL(for: song)
-            Task { [weak self] in
+            Task { @MainActor [weak self] in
                 guard let embedded = await LyricsLoader.loadEmbedded(from: audioURL) else { return }
-                await MainActor.run {
-                    guard let self, self.loadGeneration == expectedGeneration, self.lyrics == nil else { return }
-                    self.lyrics = embedded
-                }
+                guard let self, self.loadGeneration == expectedGeneration, self.lyrics == nil else { return }
+                self.lyrics = embedded
             }
         }
 

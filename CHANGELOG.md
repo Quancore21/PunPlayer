@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.1 -- Beta
+
+- **Rhythm-Locked Mascot Kinematics:** PunPun now dances at full musical tempo (2.8 to 4.6 steps/sec) with song-normalized dynamic range and clean squash-and-stretch beat bounces
+- **Full-Sized Tap Reaction:** boosted tap scale by 1.16x with high spring pop so the heart pose is big and happy
+- **Interactive MiniPlayer Drag-Up Gesture:** pull upward from the mini-player card to dynamically scale, glow, and open the full player with haptic feedback
+- **Bottom Scroll Clearance & Dedicated About Screen:** added 116pt bottom clearance so lists are never hidden behind the mini-player, and added a dedicated `AboutView` in Settings
+
+
 ## 0.1 -- Beta
 
 - **First Beta Release (0.1):** transitioned PunPlayer from the `0.0.x` alpha series into the `0.x` beta line

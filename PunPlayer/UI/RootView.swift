@@ -166,7 +166,7 @@ private struct HomeView: View {
             }
             .padding(.horizontal, 20)
             .padding(.top, 12)
-            .padding(.bottom, player.currentSong != nil ? 88 : 22)
+            .padding(.bottom, player.currentSong != nil ? 116 : 22)
             .frame(maxWidth: 620)
             .frame(maxWidth: .infinity)
         }
@@ -567,8 +567,16 @@ struct MiniPlayer: View {
     @EnvironmentObject private var settings: SettingsStore
     let onTap: () -> Void
 
+    @State private var dragOffsetY: CGFloat = 0
+    @State private var didTriggerHaptic = false
+
+    private var expandProgress: CGFloat {
+        min(1.0, max(0.0, -dragOffsetY / 130.0))
+    }
+
     var body: some View {
         if let song = player.currentSong {
+            let progress = expandProgress
             VStack(spacing: 0) {
                 HStack(spacing: 10) {
                     Button(action: onTap) {
@@ -629,12 +637,50 @@ struct MiniPlayer: View {
                     .padding(.top, 2)
                     .padding(.bottom, 4)
             }
-            .background(Pun.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .background(Pun.surface, in: RoundedRectangle(cornerRadius: 18 + progress * 6, style: .continuous))
             .overlay {
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(Pun.separator.opacity(0.8), lineWidth: 0.75)
+                RoundedRectangle(cornerRadius: 18 + progress * 6, style: .continuous)
+                    .stroke(
+                        progress > 0.05
+                            ? Pun.mango.opacity(0.40 + 0.60 * progress)
+                            : Pun.separator.opacity(0.8),
+                        lineWidth: 0.75 + progress * 1.2
+                    )
             }
+            .shadow(color: Color.black.opacity(0.24 + progress * 0.35), radius: 10 + progress * 15, y: 4 - progress * 4)
+            .scaleEffect(1.0 + progress * 0.045, anchor: .bottom)
+            .offset(y: dragOffsetY * 0.75)
             .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 12, coordinateSpace: .global)
+                    .onChanged { value in
+                        let dy = value.translation.height
+                        let dx = value.translation.width
+                        guard dy < 0 || dragOffsetY < 0 else { return }
+                        guard abs(dy) > abs(dx) * 0.7 || dragOffsetY < -6 else { return }
+                        let clamped = max(-180, min(0, dy))
+                        dragOffsetY = clamped
+                        if clamped < -60 && !didTriggerHaptic {
+                            didTriggerHaptic = true
+                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                        } else if clamped > -40 {
+                            didTriggerHaptic = false
+                        }
+                    }
+                    .onEnded { value in
+                        let dy = value.translation.height
+                        let predictedY = value.predictedEndTranslation.height
+                        let shouldOpen = (dy < -45) || (predictedY < -90)
+                        didTriggerHaptic = false
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.82)) {
+                            dragOffsetY = 0
+                        }
+                        if shouldOpen {
+                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                            onTap()
+                        }
+                    }
+            )
         }
     }
 }

@@ -6,7 +6,7 @@
 
 <p align="center">
   <b>A fast, private, artwork-first local music player for iPhone.</b><br>
-  Built with Swift &amp; SwiftUI &middot; Zero tracking &middot; Pure local audio &middot; GNU GPLv3 &middot; <b>0.1 Beta</b>
+  Built with Swift &amp; SwiftUI &middot; Zero tracking &middot; Pure local audio &middot; GNU GPLv3 &middot; <b>0.1.1 Beta</b>
 </p>
 
 <p align="center">
@@ -102,7 +102,7 @@ PunPlayer/
 ## Installation
 
 ### Option 1: Sideloading (Recommended)
-1. Download the latest `PunPlayer-0.1.ipa` from [GitHub Releases](https://github.com/Quancore21/PunPlayer/releases).
+1. Download the latest `PunPlayer-0.1.1.ipa` from [GitHub Releases](https://github.com/Quancore21/PunPlayer/releases).
 2. Sideload it using [AltStore](https://altstore.io/), [Sideloadly](https://sideloadly.io/), or [TrollStore](https://github.com/opa334/TrollStore).
 3. Sign in with your Apple ID when prompted to generate a free personal provisioning profile.
 

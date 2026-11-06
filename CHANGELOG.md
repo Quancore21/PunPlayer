@@ -2,10 +2,9 @@
 
 ## 0.1.2 -- Beta
 
-- **Fluid Interactive Mini-Player Expansion:** dragging upward (or tapping) on the mini-player now continuously expands the card to full screen, smoothly interpolating the album cover from 42pt on the left to centered full-player artwork while cross-fading into the `NowPlayingView` controls
-- **Linear De-Gamma Tempo & Dynamic Range Analyzer:** `WaveformRhythmAnalyzer` now recovers true linear acoustic energy (`pow(x, 1.613)`) and positive attack transients with 3-gear step-boundary hysteresis, keeping PunPun calm during slow intros and breakdowns (1.05 steps/sec) and energetic on fast beats (up to 3.65 steps/sec)
-- **True Scroll-Behind List Clearance:** replaced external list bottom padding with a transparent scroll-content inset in `.punScreen()`, eliminating the black cut-off bar above the mini-player across Settings, About, Library, Playlists, and Search
-- **Natural PunPun Hop-and-Wink Tap Reaction:** replaced the mismatched `punpun_love` sprite bloat with a crisp, anatomically consistent 0.85s hop-and-wink at natural 1.0x scale
+- **Single-Pass Interactive Player Presentation:** dragging upward on the mini-player (or tapping it) now slides the live `NowPlayingView` directly up from the bottom of the screen in one continuous spring motion without triggering a second navigation push
+- **Consistent Row-1 PunPun Dance & Linear Tempo Pacing:** locked PunPun's dance loop to the 4 anatomically matching Row-1 sprites with grounded micro-motion and de-gamma linear energy pacing (1.05 steps/sec on slow sections up to 2.45 steps/sec on energetic beats)
+- **True Scroll-Behind List Clearance & Dedicated About Screen:** replaced external list bottom padding with a transparent scroll-content inset in `.punScreen()`, eliminating the black cut-off bar above the mini-player across all screens
 
 ## 0.1.1 -- Pre-release
 

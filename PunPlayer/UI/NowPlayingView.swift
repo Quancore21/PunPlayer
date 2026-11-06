@@ -14,6 +14,7 @@ private enum PlayerSheet: String, Identifiable {
 }
 
 struct NowPlayingView: View {
+    var onClose: (() -> Void)? = nil
     @EnvironmentObject private var player: PlayerEngine
     @EnvironmentObject private var library: LibraryStore
     @EnvironmentObject private var playlists: PlaylistStore
@@ -405,7 +406,9 @@ struct NowPlayingView: View {
 
     private var header: some View {
         HStack(spacing: 7) {
-            Button { dismiss() } label: {
+            Button {
+                if let onClose { onClose() } else { dismiss() }
+            } label: {
                 Image(systemName: "chevron.down")
                     .font(.system(size: 15, weight: .bold))
                     .foregroundStyle(Pun.text)

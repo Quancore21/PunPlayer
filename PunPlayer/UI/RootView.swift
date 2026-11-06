@@ -14,20 +14,19 @@ struct RootView: View {
     @EnvironmentObject private var playlists: PlaylistStore
     @State private var showNowPlaying = false
     @State private var showStorageDialog = false
+    @State private var playerDragOffsetY: CGFloat = 0
+    @State private var didTriggerPullHaptic = false
 
     var body: some View {
-        // Radical architectural measure: NavigationStack maintains 100% full-screen frame
-        // at all times so navigation transitions never resize the stack or stretch the player,
-        // eliminating black gaps and layout stretching simultaneously.
+        let screenH = ScreenMetrics.shared.screenSize.height
+        let dragProgress = min(1.0, max(0.0, -playerDragOffsetY / max(1.0, screenH * 0.65)))
+        let isPlayerActive = showNowPlaying || playerDragOffsetY < -1
+        let playerOffsetY: CGFloat = showNowPlaying ? 0 : max(0, screenH + playerDragOffsetY)
+        let playerCorner: CGFloat = showNowPlaying ? 0 : min(30, max(0, (playerOffsetY / max(1, screenH)) * 34))
+
         ZStack(alignment: .bottom) {
             NavigationStack {
                 HomeView()
-                    .navigationDestination(isPresented: $showNowPlaying) {
-                        NowPlayingView()
-                            .toolbar(.hidden, for: .navigationBar)
-                            .navigationBarBackButtonHidden()
-                            .ignoresSafeArea()
-                    }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
@@ -41,12 +40,67 @@ struct RootView: View {
                             .padding(.horizontal, 12)
                             .padding(.top, 6)
                             .padding(.bottom, 5)
+                            .offset(y: playerDragOffsetY * 0.22)
+                            .scaleEffect(1.0 + dragProgress * 0.025, anchor: .bottom)
+                            .opacity(Double(max(0.0, 1.0 - dragProgress * 2.4)))
+                            .simultaneousGesture(
+                                DragGesture(minimumDistance: 8, coordinateSpace: .global)
+                                    .onChanged { value in
+                                        let dy = value.translation.height
+                                        let dx = value.translation.width
+                                        guard dy < 0 || playerDragOffsetY < 0 else { return }
+                                        guard abs(dy) > abs(dx) * 0.75 || playerDragOffsetY < -6 else { return }
+                                        playerDragOffsetY = min(0, dy)
+                                        if dy < -64 && !didTriggerPullHaptic {
+                                            didTriggerPullHaptic = true
+                                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                        } else if dy > -40 {
+                                            didTriggerPullHaptic = false
+                                        }
+                                    }
+                                    .onEnded { value in
+                                        let dy = value.translation.height
+                                        let predictedY = value.predictedEndTranslation.height
+                                        didTriggerPullHaptic = false
+                                        if dy < -64 || predictedY < -150 {
+                                            withAnimation(.spring(response: 0.35, dampingFraction: 0.88)) {
+                                                showNowPlaying = true
+                                                playerDragOffsetY = 0
+                                            }
+                                        } else {
+                                            withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
+                                                playerDragOffsetY = 0
+                                            }
+                                        }
+                                    }
+                            )
                             .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
                 }
-                .animation(.easeInOut(duration: 0.25), value: showNowPlaying)
+            }
+
+            if player.currentSong != nil {
+                Color.black
+                    .opacity(showNowPlaying ? 0.38 : Double(dragProgress * 0.38))
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
+
+                NowPlayingView(onClose: {
+                    withAnimation(.spring(response: 0.34, dampingFraction: 0.90)) {
+                        showNowPlaying = false
+                        playerDragOffsetY = 0
+                    }
+                })
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .clipShape(RoundedRectangle(cornerRadius: playerCorner, style: .continuous))
+                .shadow(color: Color.black.opacity(isPlayerActive ? 0.45 : 0), radius: 24, y: -6)
+                .offset(y: isPlayerActive ? playerOffsetY : screenH + 40)
+                .allowsHitTesting(showNowPlaying)
+                .accessibilityHidden(!showNowPlaying)
+                .zIndex(2)
             }
         }
+        .animation(.spring(response: 0.36, dampingFraction: 0.88), value: showNowPlaying)
         .background(AppBackground().ignoresSafeArea())
         .confirmationDialog("Saving is paused", isPresented: $showStorageDialog, titleVisibility: .visible) {
             Button("Try again") { pausedStores.forEach { $0.retryStorage() } }
@@ -166,7 +220,7 @@ private struct HomeView: View {
             }
             .padding(.horizontal, 20)
             .padding(.top, 12)
-            .padding(.bottom, player.currentSong != nil ? 112 : 22)
+            .padding(.bottom, player.currentSong != nil ? 110 : 22)
             .frame(maxWidth: 620)
             .frame(maxWidth: .infinity)
         }
@@ -565,294 +619,76 @@ private struct ShortcutCard: View {
 struct MiniPlayer: View {
     @EnvironmentObject private var player: PlayerEngine
     @EnvironmentObject private var settings: SettingsStore
-    @Environment(\.colorScheme) private var colorScheme
     let onTap: () -> Void
-
-    @State private var morphProgress: CGFloat = 0
-    @State private var isDragging = false
-    @State private var isCompletingOpen = false
-    @State private var didTriggerThresholdHaptic = false
-
-    private var metrics: ScreenMetrics { ScreenMetrics.shared }
-
-    private func completeOpen() {
-        guard !isCompletingOpen else { return }
-        isCompletingOpen = true
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-        withAnimation(.spring(response: 0.32, dampingFraction: 0.88)) {
-            morphProgress = 1.0
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.28) {
-            var transaction = Transaction()
-            transaction.disablesAnimations = true
-            withTransaction(transaction) {
-                onTap()
-            }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                morphProgress = 0
-                isDragging = false
-                isCompletingOpen = false
-            }
-        }
-    }
 
     var body: some View {
         if let song = player.currentSong {
-            let p = min(1.0, max(0.0, morphProgress))
-            let screenW = metrics.screenSize.width
-            let screenH = metrics.screenSize.height
-            let baseH: CGFloat = 74
-            let currentH: CGFloat = baseH + (screenH - baseH) * p
-            let horizEdgePad: CGFloat = -12 * p
-            let bottomEdgePad: CGFloat = -(5 + metrics.bottomSafeArea) * p
-            let topEdgePad: CGFloat = -(6 + metrics.topSafeArea) * p
-            let corner: CGFloat = p > 0.96 ? (44 * (1.0 - (p - 0.96) / 0.04)) : (18 + 26 * p)
-            let miniOpacity = Double(max(0.0, 1.0 - p * 3.8))
-            let fullOpacity = Double(min(1.0, max(0.0, (p - 0.16) / 0.72)))
-
-            ZStack(alignment: .topLeading) {
-                // 1. Compact MiniPlayer row + waveform lane (visible at rest, fades out cleanly on upward drag)
-                VStack(spacing: 0) {
-                    HStack(spacing: 10) {
-                        Button(action: completeOpen) {
-                            HStack(spacing: 11) {
-                                Color.clear
-                                    .frame(width: 42, height: 42)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(song.title)
-                                        .font(Pun.body(.semibold))
-                                        .foregroundStyle(Pun.text)
-                                        .lineLimit(1)
-                                        .truncationMode(.tail)
-                                    Text(song.artist)
-                                        .font(Pun.caption())
-                                        .foregroundStyle(Pun.textDim)
-                                        .lineLimit(1)
-                                        .truncationMode(.tail)
-                                }
-                                Spacer(minLength: 0)
-                            }
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(Text(AppLocalization.format("accessibility.openPlayer", defaultFormat: "Open player for %@", song.title)))
-
-                        if settings.showPunPun {
-                            PunPunMiniFaceView(isPlaying: player.isPlaying, size: 28)
-                                .padding(.trailing, 2)
-                        }
-
-                        Button { player.togglePlayPause() } label: {
-                            Image(systemName: player.isActive ? "pause.fill" : "play.fill")
-                                .font(.system(size: 17, weight: .semibold))
-                                .foregroundStyle(Pun.text)
-                                .frame(width: 38, height: 42)
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(player.isActive ? "Pause" : "Play")
-
-                        Button { player.next() } label: {
-                            Image(systemName: "forward.end.fill")
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundStyle(Pun.text)
-                                .frame(width: 32, height: 42)
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Next track")
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.top, 7)
-                    .padding(.bottom, 6)
-
-                    // The decoded waveform and progress share one lane inside the opaque card.
-                    MiniProgress(clock: player.clock, song: song)
-                        .frame(height: 13)
-                        .padding(.horizontal, 12)
-                        .padding(.top, 2)
-                        .padding(.bottom, 4)
-                }
-                .opacity(miniOpacity)
-                .offset(y: -10 * p)
-                .allowsHitTesting(p < 0.04 && !isCompletingOpen)
-
-                // 2. Expanded player header & bottom controls (morph in smoothly as card rises)
-                if p > 0.01 {
-                    VStack(spacing: 0) {
-                        HStack(spacing: 7) {
-                            Image(systemName: "chevron.down")
-                                .font(.system(size: 15, weight: .bold))
-                                .foregroundStyle(Pun.text)
-                                .frame(width: 39, height: 39)
-                                .background(Pun.surface.opacity(0.86), in: Circle())
-                                .overlay(Circle().stroke(Pun.separator.opacity(0.8), lineWidth: 0.75))
+            VStack(spacing: 0) {
+                HStack(spacing: 10) {
+                    Button(action: onTap) {
+                        HStack(spacing: 11) {
+                            ArtworkView(key: song.artworkKey, seed: song.album, size: 42, corner: 9)
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("Now Playing")
-                                    .font(.system(size: 10, weight: .bold, design: .rounded))
-                                    .tracking(1.5)
+                                Text(song.title)
+                                    .font(Pun.body(.semibold))
                                     .foregroundStyle(Pun.text)
-                                Text(LocalizedStringKey(player.queueTitle))
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
+                                Text(song.artist)
                                     .font(Pun.caption())
                                     .foregroundStyle(Pun.textDim)
                                     .lineLimit(1)
+                                    .truncationMode(.tail)
                             }
-                            .padding(.leading, 3)
                             Spacer(minLength: 0)
                         }
-                        .frame(minHeight: 48)
-                        .opacity(fullOpacity)
-
-                        Spacer(minLength: 4)
-
-                        Color.clear
-                            .frame(width: metrics.artworkSide + 10, height: metrics.artworkSide + 10)
-
-                        Spacer(minLength: 4)
-
-                        VStack(spacing: metrics.isCompact ? 6 : 10) {
-                            HStack(alignment: .bottom, spacing: 10) {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(song.title)
-                                        .font(Pun.title(.title2))
-                                        .tracking(-0.35)
-                                        .foregroundStyle(Pun.text)
-                                        .lineLimit(2)
-                                    Text(song.artist)
-                                        .font(Pun.body(.medium))
-                                        .foregroundStyle(Pun.mango)
-                                        .lineLimit(1)
-                                }
-                                .frame(maxWidth: .infinity, alignment: .leading)
-
-                                if settings.showPunPun {
-                                    PunPunCompanionView(
-                                        song: song,
-                                        isPlaying: player.isPlaying,
-                                        clock: player.clock,
-                                        size: metrics.isCompact ? 52 : 62
-                                    )
-                                    .padding(.bottom, -4)
-                                }
-                            }
-
-                            SeekBar(clock: player.clock, song: song) { _ in }
-                                .allowsHitTesting(false)
-
-                            HStack(alignment: .center, spacing: 0) {
-                                Image(systemName: "backward.end.fill")
-                                    .font(.system(size: 21, weight: .semibold))
-                                    .foregroundStyle(Pun.text)
-                                    .frame(width: 52, height: 54)
-                                Spacer(minLength: 24)
-                                OrbitPlayPauseButton(isActive: player.isActive, isBuffering: player.isBuffering, size: 70) {}
-                                    .allowsHitTesting(false)
-                                Spacer(minLength: 24)
-                                Image(systemName: "forward.end.fill")
-                                    .font(.system(size: 21, weight: .semibold))
-                                    .foregroundStyle(Pun.text)
-                                    .frame(width: 52, height: 54)
-                            }
-                            .frame(maxWidth: 340)
-                            .frame(maxWidth: .infinity)
-                        }
-                        .opacity(fullOpacity)
+                        .contentShape(Rectangle())
                     }
-                    .padding(.horizontal, 22)
-                    .padding(.top, metrics.playerTopPadding * p)
-                    .padding(.bottom, metrics.playerBottomPadding * p)
-                    .frame(maxWidth: 520)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .allowsHitTesting(false)
-                }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(Text(AppLocalization.format("accessibility.openPlayer", defaultFormat: "Open player for %@", song.title)))
 
-                // 3. Single unified Hero ArtworkView (glides from 42pt left slot to centered full artwork)
-                GeometryReader { geo in
-                    let startSize: CGFloat = 42
-                    let endSize: CGFloat = metrics.artworkSide
-                    let artSize = startSize + (endSize - startSize) * p
-                    let startX: CGFloat = 12 + startSize * 0.5
-                    let endX: CGFloat = geo.size.width * 0.5
-                    let curX = startX + (endX - startX) * p
-                    let startY: CGFloat = 7 + startSize * 0.5
-                    let targetEndY: CGFloat = (metrics.playerTopPadding + 48 + (screenH - metrics.playerBottomPadding - metrics.controlsFootprint)) * 0.5
-                    let curY = startY + (targetEndY - startY) * p
-                    let artCorner: CGFloat = 9 + 9 * p
-
-                    ArtworkView(key: song.artworkKey, seed: song.album, size: artSize, corner: artCorner)
-                        .shadow(color: .black.opacity(0.24 * Double(p)), radius: 16 * p, y: 8 * p)
-                        .position(x: curX, y: curY)
-                }
-                .allowsHitTesting(false)
-            }
-            .frame(height: currentH)
-            .frame(maxWidth: .infinity)
-            .background {
-                ZStack {
-                    Pun.surface
-                    if p > 0.01 {
-                        Pun.ink.opacity(Double(p))
-                        if let tint = ArtworkStore.shared.tint(forKey: song.artworkKey).map({ Color(uiColor: $0) }) {
-                            tint.opacity((colorScheme == .dark ? 0.28 : 0.10) * Double(p))
-                        }
-                        if let key = song.artworkKey,
-                           let image = ArtworkStore.shared.image(forKey: key, maxPixel: 260) {
-                            Image(uiImage: image)
-                                .resizable()
-                                .scaledToFill()
-                                .frame(width: max(1, screenW), height: max(1, currentH))
-                                .clipped()
-                                .blur(radius: 72)
-                                .opacity((colorScheme == .dark ? 0.32 : 0.12) * Double(p))
-                        }
+                    if settings.showPunPun {
+                        PunPunMiniFaceView(isPlaying: player.isPlaying, size: 28)
+                            .padding(.trailing, 2)
                     }
+
+                    Button { player.togglePlayPause() } label: {
+                        Image(systemName: player.isActive ? "pause.fill" : "play.fill")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(Pun.text)
+                            .frame(width: 38, height: 42)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(player.isActive ? "Pause" : "Play")
+
+                    Button { player.next() } label: {
+                        Image(systemName: "forward.end.fill")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(Pun.text)
+                            .frame(width: 32, height: 42)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Next track")
                 }
-                .clipShape(RoundedRectangle(cornerRadius: corner, style: .continuous))
+                .padding(.horizontal, 12)
+                .padding(.top, 7)
+                .padding(.bottom, 6)
+
+                // The decoded waveform and progress share one lane inside the opaque card.
+                MiniProgress(clock: player.clock, song: song)
+                    .frame(height: 13)
+                    .padding(.horizontal, 12)
+                    .padding(.top, 2)
+                    .padding(.bottom, 4)
             }
+            .background(Pun.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             .overlay {
-                RoundedRectangle(cornerRadius: corner, style: .continuous)
-                    .stroke(Pun.separator.opacity(0.8 * Double(1.0 - p * 0.7)), lineWidth: 0.75)
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(Pun.separator.opacity(0.8), lineWidth: 0.75)
             }
-            .shadow(color: Color.black.opacity(0.28 + 0.25 * Double(p)), radius: 14 + 16 * p, y: 4)
-            .padding(.horizontal, horizEdgePad)
-            .padding(.top, topEdgePad)
-            .padding(.bottom, bottomEdgePad)
-            .contentShape(RoundedRectangle(cornerRadius: corner, style: .continuous))
-            .simultaneousGesture(
-                DragGesture(minimumDistance: 8, coordinateSpace: .global)
-                    .onChanged { value in
-                        guard !isCompletingOpen else { return }
-                        let dy = value.translation.height
-                        let dx = value.translation.width
-                        if !isDragging {
-                            guard dy < -4 && abs(dy) > abs(dx) * 0.75 else { return }
-                            isDragging = true
-                        }
-                        let dragRange = max(240.0, screenH * 0.55)
-                        let rawProgress = min(1.0, max(0.0, -dy / dragRange))
-                        morphProgress = rawProgress
-                        if rawProgress > 0.22 && !didTriggerThresholdHaptic {
-                            didTriggerThresholdHaptic = true
-                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                        } else if rawProgress < 0.15 {
-                            didTriggerThresholdHaptic = false
-                        }
-                    }
-                    .onEnded { value in
-                        guard isDragging, !isCompletingOpen else { return }
-                        let dy = value.translation.height
-                        let predictedY = value.predictedEndTranslation.height
-                        didTriggerThresholdHaptic = false
-                        if dy < -65 || predictedY < -150 || morphProgress > 0.25 {
-                            completeOpen()
-                        } else {
-                            withAnimation(.spring(response: 0.30, dampingFraction: 0.86)) {
-                                morphProgress = 0
-                                isDragging = false
-                            }
-                        }
-                    }
-            )
+            .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
     }
 }

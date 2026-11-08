@@ -1,6 +1,6 @@
 //
-//  PunPlayer — UI/RootView.swift
-//  Home-first navigation and a compact, persistent mini-player.
+//  PunPlayer вЂ” UI/RootView.swift
+//  Home-first navigation and a unified interactive expanding mini-to-full player.
 //  PunPlayer is licensed under GPLv3.
 //
 
@@ -12,95 +12,141 @@ struct RootView: View {
     @EnvironmentObject private var library: LibraryStore
     @EnvironmentObject private var stats: StatsStore
     @EnvironmentObject private var playlists: PlaylistStore
+
     @State private var showNowPlaying = false
     @State private var showStorageDialog = false
-    @State private var playerDragOffsetY: CGFloat = 0
-    @State private var didTriggerPullHaptic = false
+    /// Single continuous expansion state: 0.0 = collapsed MiniPlayer, 1.0 = full-screen NowPlayingView.
+    @State private var expansion: CGFloat = 0.0
+    @State private var dragStartExpansion: CGFloat = 0.0
+    @State private var isDraggingPlayer = false
+    @State private var didTriggerDragHaptic = false
+
+    private var metrics: ScreenMetrics { ScreenMetrics.shared }
+
+    private func animatePlayer(open: Bool) {
+        showNowPlaying = open
+        isDraggingPlayer = false
+        didTriggerDragHaptic = false
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.88)) {
+            expansion = open ? 1.0 : 0.0
+        }
+    }
 
     var body: some View {
-        let screenH = ScreenMetrics.shared.screenSize.height
-        let dragProgress = min(1.0, max(0.0, -playerDragOffsetY / max(1.0, screenH * 0.65)))
-        let isPlayerActive = showNowPlaying || playerDragOffsetY < -1
-        let playerOffsetY: CGFloat = showNowPlaying ? 0 : max(0, screenH + playerDragOffsetY)
-        let playerCorner: CGFloat = showNowPlaying ? 0 : min(30, max(0, (playerOffsetY / max(1, screenH)) * 34))
+        let p = min(1.0, max(0.0, expansion))
+        let screenW = metrics.screenSize.width
+        let screenH = metrics.screenSize.height
+        let miniH: CGFloat = 74
+        let cardW: CGFloat = screenW - 24.0 * (1.0 - p)
+        let cardH: CGFloat = miniH + (screenH - miniH) * p
+        let bottomInset: CGFloat = (metrics.bottomSafeArea + 5.0) * (1.0 - p)
+        let cardCorner: CGFloat = p >= 0.99 ? 0.0 : (18.0 + 22.0 * sin(p * .pi))
+        let miniOpacity = Double(max(0.0, 1.0 - p * 3.8))
+        let fullOpacity = Double(min(1.0, max(0.0, (p - 0.05) / 0.50)))
 
         ZStack(alignment: .bottom) {
             NavigationStack {
                 HomeView()
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .scaleEffect(1.0 - p * 0.03)
+            .allowsHitTesting(p < 0.05)
 
             if !showNowPlaying {
-                VStack(spacing: 0) {
-                    if !pausedStores.isEmpty {
-                        storageBanner
-                    }
-                    if player.currentSong != nil {
-                        MiniPlayer { showNowPlaying = true }
-                            .padding(.horizontal, 12)
-                            .padding(.top, 6)
-                            .padding(.bottom, 5)
-                            .offset(y: playerDragOffsetY * 0.22)
-                            .scaleEffect(1.0 + dragProgress * 0.025, anchor: .bottom)
-                            .opacity(Double(max(0.0, 1.0 - dragProgress * 2.4)))
-                            .simultaneousGesture(
-                                DragGesture(minimumDistance: 8, coordinateSpace: .global)
-                                    .onChanged { value in
-                                        let dy = value.translation.height
-                                        let dx = value.translation.width
-                                        guard dy < 0 || playerDragOffsetY < 0 else { return }
-                                        guard abs(dy) > abs(dx) * 0.75 || playerDragOffsetY < -6 else { return }
-                                        playerDragOffsetY = min(0, dy)
-                                        if dy < -64 && !didTriggerPullHaptic {
-                                            didTriggerPullHaptic = true
-                                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                                        } else if dy > -40 {
-                                            didTriggerPullHaptic = false
-                                        }
-                                    }
-                                    .onEnded { value in
-                                        let dy = value.translation.height
-                                        let predictedY = value.predictedEndTranslation.height
-                                        didTriggerPullHaptic = false
-                                        if dy < -64 || predictedY < -150 {
-                                            withAnimation(.spring(response: 0.35, dampingFraction: 0.88)) {
-                                                showNowPlaying = true
-                                                playerDragOffsetY = 0
-                                            }
-                                        } else {
-                                            withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
-                                                playerDragOffsetY = 0
-                                            }
-                                        }
-                                    }
-                            )
-                            .transition(.move(edge: .bottom).combined(with: .opacity))
-                    }
+                if !pausedStores.isEmpty {
+                    storageBanner
+                        .padding(.bottom, player.currentSong != nil ? (miniH + bottomInset + 6) : 0)
                 }
             }
 
             if player.currentSong != nil {
                 Color.black
-                    .opacity(showNowPlaying ? 0.38 : Double(dragProgress * 0.38))
+                    .opacity(Double(p * 0.42))
                     .ignoresSafeArea()
                     .allowsHitTesting(false)
 
-                NowPlayingView(onClose: {
-                    withAnimation(.spring(response: 0.34, dampingFraction: 0.90)) {
-                        showNowPlaying = false
-                        playerDragOffsetY = 0
+                ZStack(alignment: .top) {
+                    // Full player content inside the same expanding card (locked to screenW x screenH so layout never crushes)
+                    NowPlayingView(onClose: {
+                        animatePlayer(open: false)
+                    })
+                    .frame(width: screenW, height: screenH)
+                    .scaleEffect(0.92 + 0.08 * p, anchor: .top)
+                    .opacity(fullOpacity)
+                    .allowsHitTesting(p > 0.95)
+                    .accessibilityHidden(p < 0.95)
+
+                    // Compact mini-player pinned to the top of the rising card (fades out smoothly as the card grows)
+                    if p < 0.95 {
+                        MiniPlayer { showNowPlaying = true }
+                            .frame(width: cardW)
+                            .opacity(miniOpacity)
+                            .allowsHitTesting(p < 0.05)
                     }
-                })
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .clipShape(RoundedRectangle(cornerRadius: playerCorner, style: .continuous))
-                .shadow(color: Color.black.opacity(isPlayerActive ? 0.45 : 0), radius: 24, y: -6)
-                .offset(y: isPlayerActive ? playerOffsetY : screenH + 40)
-                .allowsHitTesting(showNowPlaying)
-                .accessibilityHidden(!showNowPlaying)
+                }
+                .frame(width: cardW, height: cardH, alignment: .top)
+                .background(Pun.surface)
+                .clipShape(RoundedRectangle(cornerRadius: cardCorner, style: .continuous))
+                .overlay {
+                    if p < 0.99 {
+                        RoundedRectangle(cornerRadius: cardCorner, style: .continuous)
+                            .stroke(Pun.separator.opacity(0.8 * Double(1.0 - p)), lineWidth: 0.75)
+                    }
+                }
+                .shadow(color: Color.black.opacity(0.28 + 0.22 * Double(p)), radius: 14 + 14 * p, y: 4)
+                .padding(.bottom, bottomInset)
+                .simultaneousGesture(
+                    DragGesture(minimumDistance: 8, coordinateSpace: .global)
+                        .onChanged { value in
+                            let dy = value.translation.height
+                            let dx = value.translation.width
+                            if !isDraggingPlayer {
+                                if !showNowPlaying {
+                                    guard dy < -5 && abs(dy) > abs(dx) * 0.75 else { return }
+                                } else {
+                                    // Allow pull-down to close when dragging from the top header region
+                                    guard value.startLocation.y < metrics.topSafeArea + 85 && dy > 6 && abs(dy) > abs(dx) * 0.75 else { return }
+                                }
+                                isDraggingPlayer = true
+                                dragStartExpansion = expansion
+                            }
+                            let dragSpan = max(260.0, screenH * 0.58)
+                            let delta = -dy / dragSpan
+                            let next = min(1.0, max(0.0, dragStartExpansion + delta))
+                            expansion = next
+                            if !showNowPlaying && next > 0.22 && !didTriggerDragHaptic {
+                                didTriggerDragHaptic = true
+                                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                            } else if !showNowPlaying && next < 0.14 {
+                                didTriggerDragHaptic = false
+                            }
+                        }
+                        .onEnded { value in
+                            guard isDraggingPlayer else { return }
+                            let dy = value.translation.height
+                            let predictedY = value.predictedEndTranslation.height
+                            if !showNowPlaying {
+                                let shouldOpen = (expansion > 0.22) || (dy < -65) || (predictedY < -150)
+                                animatePlayer(open: shouldOpen)
+                            } else {
+                                let shouldClose = (expansion < 0.78) || (dy > 75) || (predictedY > 170)
+                                animatePlayer(open: !shouldClose)
+                            }
+                        }
+                )
+                .ignoresSafeArea()
                 .zIndex(2)
             }
         }
-        .animation(.spring(response: 0.36, dampingFraction: 0.88), value: showNowPlaying)
+        .ignoresSafeArea(edges: .bottom)
+        .onChange(of: showNowPlaying) { isOpen in
+            let target: CGFloat = isOpen ? 1.0 : 0.0
+            if abs(expansion - target) > 0.001 {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.88)) {
+                    expansion = target
+                }
+            }
+        }
         .background(AppBackground().ignoresSafeArea())
         .confirmationDialog("Saving is paused", isPresented: $showStorageDialog, titleVisibility: .visible) {
             Button("Try again") { pausedStores.forEach { $0.retryStorage() } }

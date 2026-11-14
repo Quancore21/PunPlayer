@@ -13,7 +13,7 @@ struct SettingsView: View {
     @EnvironmentObject private var playlists: PlaylistStore
 
     private var appVersion: String {
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.1.2"
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.2"
     }
     @State private var showImporter = false
     @State private var showCleanupConfirm = false
@@ -64,7 +64,7 @@ struct SettingsView: View {
             } header: {
                 Text("PunPun").foregroundStyle(Pun.textDim)
             } footer: {
-                Text("PunPun lives in the player and mini-player, dances to the rhythm of your music, naps when paused, and reacts when tapped. Disabled by default.")
+                Text("PunPun lives in the player and mini-player, dances to the rhythm of your music, and naps when paused. Disabled by default.")
                     .foregroundStyle(Pun.textDim)
             }
             .listRowBackground(Pun.surface)
@@ -195,7 +195,7 @@ struct AboutView: View {
     @EnvironmentObject private var settings: SettingsStore
 
     private var appVersion: String {
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.1.2"
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.2"
     }
 
     var body: some View {

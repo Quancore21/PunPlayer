@@ -23,8 +23,8 @@ edge_swipe_tests = (ROOT / "Tests/PunCoreTests/PlayerEdgeSwipeTests.swift").read
 orbit_button = (ROOT / "PunPlayer/UI/OrbitPlayPauseButton.swift").read_text(encoding="utf-8")
 
 version_match = re.search(r'^\s*MARKETING_VERSION:\s*"([^"]+)"', project, re.MULTILINE)
-require(version_match is not None and version_match.group(1) == "0.1.2", "project.yml must declare MARKETING_VERSION 0.1.2")
-require('CURRENT_PROJECT_VERSION: "12"' in project, "project.yml must declare build number 12")
+require(version_match is not None and version_match.group(1) == "0.2", "project.yml must declare MARKETING_VERSION 0.2")
+require('CURRENT_PROJECT_VERSION: "20"' in project, "project.yml must declare build number 20")
 require('NowPlayingView(onClose:' in root_view, "Player must use direct interactive presentation in RootView (not a modal player sheet)")
 require('.sheet(isPresented: $showNowPlaying)' not in root_view, "Old modal player sheet must not return")
 require('if !showNowPlaying {' in root_view, "Home mini-player/storage banner must hide while the full player is open")

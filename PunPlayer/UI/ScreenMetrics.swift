@@ -1,5 +1,5 @@
 //
-//  PunPlayer вЂ” UI/ScreenMetrics.swift
+//  PunPlayer — UI/ScreenMetrics.swift
 //  Pre-computes and caches device screen dimensions at launch so the player
 //  layout never animates or stretches in real time during navigation transitions.
 //  PunPlayer is licensed under GPLv3.

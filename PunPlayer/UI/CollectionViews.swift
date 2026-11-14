@@ -164,7 +164,8 @@ struct LibraryView: View {
             HStack(spacing: 8) {
                 ForEach(Section.allCases) { item in
                     Button {
-                        withAnimation(.easeInOut(duration: 0.18)) { section = item }
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        withAnimation(.spring(response: 0.26, dampingFraction: 0.82)) { section = item }
                     } label: {
                         Text(LocalizedStringKey(item.rawValue))
                             .font(Pun.body(.semibold))
@@ -218,7 +219,7 @@ struct LibraryView: View {
                     } label: {
                         VStack(alignment: .leading, spacing: 7) {
                             GeometryReader { proxy in
-                                ArtworkView(key: album.artworkKey, seed: album.title, size: proxy.size.width, corner: 13)
+                                ArtworkView(key: album.artworkKey, seed: album.title, size: proxy.size.width, corner: 14).shadow(color: Color.black.opacity(0.22), radius: 8, y: 4)
                             }
                             .aspectRatio(1, contentMode: .fit)
                             Text(album.title)

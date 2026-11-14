@@ -1,9 +1,8 @@
 //
 //  PunPlayer — UI/Theme.swift
 //
-//  Visual identity. The layout mixes ideas from both source apps (TimberX: clear library
-//  structure; Musicr: dark, artwork-tinted surfaces and large covers) but colours, type
-//  and components are PunPlayer's own.
+//  Visual identity (0.2): Deep obsidian dark & warm cream light palettes,
+//  specular Liquid Glass cards, dual ambient cover glow, and live equalizer bars.
 //  PunPlayer is licensed under GPLv3.
 //
 
@@ -23,16 +22,14 @@ extension Color {
 }
 
 enum Pun {
-    // The icon's warm amber is the identity colour. In light mode it is deliberately
-    // deepened so selected controls and small text retain readable contrast.
-    static let ink = adaptive(dark: 0x0D1010, light: 0xF7F5EF)
-    static let surface = adaptive(dark: 0x171B1B, light: 0xFFFFFF)
-    static let surfaceRaised = adaptive(dark: 0x202626, light: 0xEEEAE1)
+    static let ink = adaptive(dark: 0x080A0B, light: 0xF4EFE6)
+    static let surface = adaptive(dark: 0x131718, light: 0xFCFBF8)
+    static let surfaceRaised = adaptive(dark: 0x1C2223, light: 0xEAE3D5)
     static let amber = Color(hex: 0xFEAE25)
-    static let mango = adaptive(dark: 0xFEAE25, light: 0x8D4E00)
-    static let text = adaptive(dark: 0xF4F3ED, light: 0x181B1A)
-    static let textDim = adaptive(dark: 0xA0A7A4, light: 0x686E6B)
-    static let separator = adaptive(dark: 0x303635, light: 0xDEDAD1)
+    static let mango = adaptive(dark: 0xFEAE25, light: 0x9A5500)
+    static let text = adaptive(dark: 0xF6F5EF, light: 0x141716)
+    static let textDim = adaptive(dark: 0x98A09D, light: 0x5B625F)
+    static let separator = adaptive(dark: 0x2A3130, light: 0xD6CFC1)
 
     private static func adaptive(dark: UInt32, light: UInt32) -> Color {
         Color(uiColor: UIColor { traits in
@@ -47,7 +44,7 @@ enum Pun {
     }
 
     static func title(_ style: Font.TextStyle = .title2) -> Font {
-        .system(style, design: .default).weight(.bold)
+        .system(style, design: .rounded).weight(.bold)
     }
     static func body(_ weight: Font.Weight = .regular) -> Font {
         .system(.body, design: .default).weight(weight)
@@ -154,26 +151,73 @@ enum Format {
     }
 }
 
-// MARK: - Background
+// MARK: - Background & Liquid Glass Surface
 
-/// Theme-aware background with a restrained wash of the current cover's colour.
 struct AppBackground: View {
     @EnvironmentObject private var player: PlayerEngine
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         let tint = ArtworkStore.shared.tint(forKey: player.currentSong?.artworkKey)
-            .map { Color(uiColor: $0) } ?? Pun.surfaceRaised
+            .map { Color(uiColor: $0) } ?? Pun.amber.opacity(0.65)
+        let isDark = (colorScheme == .dark)
 
         ZStack {
             Pun.ink
             LinearGradient(
-                colors: [tint.opacity(colorScheme == .dark ? 0.28 : 0.10), Pun.ink.opacity(0)],
-                startPoint: .top, endPoint: .center
+                colors: [
+                    tint.opacity(isDark ? 0.30 : 0.15),
+                    Pun.ink.opacity(0.0),
+                    tint.opacity(isDark ? 0.14 : 0.07)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
             )
         }
-        .animation(.easeInOut(duration: 0.6), value: player.currentSong?.id)
+        .animation(.easeInOut(duration: 0.55), value: player.currentSong?.id)
         .ignoresSafeArea()
+    }
+}
+
+private struct LiquidGlassCardModifier: ViewModifier {
+    let corner: CGFloat
+    let prominent: Bool
+    @Environment(\.colorScheme) private var colorScheme
+
+    func body(content: Content) -> some View {
+        let isDark = (colorScheme == .dark)
+        content
+            .background {
+                RoundedRectangle(cornerRadius: corner, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                prominent ? Pun.surfaceRaised : Pun.surface,
+                                Pun.surface.opacity(isDark ? 0.94 : 0.99)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: corner, style: .continuous)
+                    .strokeBorder(
+                        LinearGradient(
+                            colors: [
+                                prominent
+                                    ? Pun.mango.opacity(isDark ? 0.44 : 0.34)
+                                    : Color.white.opacity(isDark ? 0.16 : 0.92),
+                                Pun.separator.opacity(isDark ? 0.45 : 0.55)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: prominent ? 1.0 : 0.8
+                    )
+            }
+            .shadow(color: Color.black.opacity(isDark ? 0.24 : 0.04), radius: 2, y: 1)
+            .shadow(color: Color.black.opacity(isDark ? 0.26 : 0.06), radius: prominent ? 14 : 10, y: prominent ? 6 : 4)
     }
 }
 
@@ -192,7 +236,6 @@ private struct MiniPlayerScrollClearance: ViewModifier {
 }
 
 extension View {
-    /// Applies the app background, scroll-behind mini-player clearance, and navigation chrome.
     func punScreen() -> some View {
         self
             .scrollContentBackground(.hidden)
@@ -202,13 +245,16 @@ extension View {
             .toolbar(.visible, for: .navigationBar)
             .tint(Pun.mango)
     }
+
+    func punGlassCard(corner: CGFloat = 19, prominent: Bool = false) -> some View {
+        modifier(LiquidGlassCardModifier(corner: corner, prominent: prominent))
+    }
 }
 
 // MARK: - Components
 
 struct ArtworkView: View {
     let key: String?
-    /// Text used to pick a stable placeholder colour.
     let seed: String
     var size: CGFloat
     var corner: CGFloat = 10
@@ -225,6 +271,10 @@ struct ArtworkView: View {
         }
         .frame(width: size, height: size)
         .clipShape(RoundedRectangle(cornerRadius: corner, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: corner, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.14), lineWidth: 0.6)
+        }
     }
 
     private var placeholder: some View {
@@ -253,20 +303,51 @@ struct PunButtonStyle: ButtonStyle {
             .padding(.vertical, 12)
             .foregroundStyle(filled ? Color.black : Pun.text)
             .background(filled ? Pun.amber : Pun.surfaceRaised, in: Capsule())
-            .opacity(configuration.isPressed ? 0.8 : 1)
+            .overlay {
+                Capsule().strokeBorder(Color.white.opacity(filled ? 0.25 : 0.12), lineWidth: 0.75)
+            }
+            .scaleEffect(configuration.isPressed ? 0.96 : 1.0)
+            .opacity(configuration.isPressed ? 0.88 : 1.0)
+            .animation(.spring(response: 0.22, dampingFraction: 0.75), value: configuration.isPressed)
+    }
+}
+
+struct PlayingBarsView: View {
+    let isPlaying: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: !isPlaying || reduceMotion)) { timeline in
+            let t = timeline.date.timeIntervalSinceReferenceDate
+            let h1: CGFloat = (isPlaying && !reduceMotion) ? CGFloat(0.35 + 0.65 * abs(sin(t * 4.8))) : 0.40
+            let h2: CGFloat = (isPlaying && !reduceMotion) ? CGFloat(0.30 + 0.70 * abs(sin(t * 6.1 + 1.1))) : 0.75
+            let h3: CGFloat = (isPlaying && !reduceMotion) ? CGFloat(0.35 + 0.65 * abs(sin(t * 5.3 + 2.3))) : 0.50
+
+            HStack(alignment: .bottom, spacing: 2.5) {
+                Capsule().fill(Pun.mango).frame(width: 2.8, height: 14 * h1)
+                Capsule().fill(Pun.mango).frame(width: 2.8, height: 14 * h2)
+                Capsule().fill(Pun.mango).frame(width: 2.8, height: 14 * h3)
+            }
+            .frame(width: 16, height: 15, alignment: .bottom)
+        }
+        .accessibilityHidden(true)
     }
 }
 
 struct SongRow: View {
     let song: Song
     var isCurrent = false
+    var showsArtwork = true
+    @EnvironmentObject private var player: PlayerEngine
 
     var body: some View {
         HStack(spacing: 12) {
-            ArtworkView(key: song.artworkKey, seed: song.album, size: 48, corner: 8)
+            if showsArtwork {
+                ArtworkView(key: song.artworkKey, seed: song.album, size: 48, corner: 10)
+            }
             VStack(alignment: .leading, spacing: 2) {
                 Text(song.title)
-                    .font(Pun.body(.medium))
+                    .font(Pun.body(isCurrent ? .semibold : .medium))
                     .foregroundStyle(isCurrent ? Pun.mango : Pun.text)
                     .lineLimit(1)
                 Text(song.artist)
@@ -276,8 +357,7 @@ struct SongRow: View {
             }
             Spacer(minLength: 8)
             if isCurrent {
-                Image(systemName: "waveform")
-                    .foregroundStyle(Pun.mango)
+                PlayingBarsView(isPlaying: player.isPlaying)
             } else {
                 Text(Format.time(song.duration))
                     .font(Pun.caption())
@@ -289,7 +369,6 @@ struct SongRow: View {
     }
 }
 
-/// Long-press menu shared by every song row.
 struct SongMenu: ViewModifier {
     let song: Song
     @EnvironmentObject private var player: PlayerEngine

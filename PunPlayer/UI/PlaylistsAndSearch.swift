@@ -230,8 +230,7 @@ struct SearchView: View {
             }
         }
         .padding(12)
-        .background(Pun.surfaceRaised, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 15, style: .continuous).stroke(Pun.separator.opacity(0.7), lineWidth: 0.7))
+        .punGlassCard(corner: 15, prominent: false)
         .padding(.horizontal, 16)
         .padding(.top, 4)
         .padding(.bottom, 10)

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2 -- Beta
+
+- **Kinetic Orbital Disc Artwork:** when playing, a glossy obsidian disc with an amber planetary core emerges at 45 degrees behind the glass album cover and rotates smoothly, eclipsing back behind the cover on pause
+- **Liquid Glass Surfaces & Dual-Mode Palette Refinement:** upgraded dark obsidian and warm cream light themes with specular glass rims, dual-layer depth shadows, cover-reactive ambient glow, and live 3-bar equalizer indicators
+- **Magnetic Scrubbing Lens & Keplerian Orbit Button:** added magnetic bar magnification and amber glow while scrubbing the waveform, refined Keplerian orbital velocity on Play/Pause, and grouped Shuffle/Repeat/Lyrics into quick-toggle tiles
+- **Clean Album Tracklist & Pure Rhythm PunPun:** removed redundant cover thumbnails inside the album tracklist drawer and made PunPun purely rhythm-reactive without tap glitches
+
+
 ## 0.1.2 -- Beta
 
 - **Single-Pass Interactive Player Presentation:** dragging upward on the mini-player (or tapping it) now slides the live `NowPlayingView` directly up from the bottom of the screen in one continuous spring motion without triggering a second navigation push

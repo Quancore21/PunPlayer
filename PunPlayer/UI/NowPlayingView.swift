@@ -15,12 +15,19 @@ private enum PlayerSheet: String, Identifiable {
 
 struct NowPlayingView: View {
     var onClose: (() -> Void)? = nil
+    @Binding var isOverlayActive: Bool
+
+    init(onClose: (() -> Void)? = nil, isOverlayActive: Binding<Bool> = .constant(false)) {
+        self.onClose = onClose
+        self._isOverlayActive = isOverlayActive
+    }
     @EnvironmentObject private var player: PlayerEngine
     @EnvironmentObject private var library: LibraryStore
     @EnvironmentObject private var playlists: PlaylistStore
     @EnvironmentObject private var settings: SettingsStore
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var metrics: ScreenMetrics { ScreenMetrics.shared }
     @State private var showLyrics = false
@@ -34,6 +41,10 @@ struct NowPlayingView: View {
     @State private var prevScale: CGFloat = 1.0
     @State private var nextNudge: CGFloat = 0
     @State private var nextScale: CGFloat = 1.0
+
+    private func updateOverlayState() {
+        isOverlayActive = showLyrics || showTracklistDrawer || isDraggingOpen || (activeSheet != nil)
+    }
 
     private func openTracklistDrawer(width: CGFloat? = nil) {
         drawerAnimationToken += 1
@@ -83,7 +94,7 @@ struct NowPlayingView: View {
                 edgeGestureOverlays(size: stableSize)
 
                 if isDrawerVisible, let song = player.currentSong {
-                    Color.black.opacity(0.50 * progress)
+                    Color.black.opacity(0.68 * progress)
                         .ignoresSafeArea()
                         .onTapGesture {
                             dismissTracklistDrawer(width: drawerWidth)
@@ -198,6 +209,10 @@ struct NowPlayingView: View {
             .presentationDragIndicator(.visible)
         }
         .animation(.easeInOut(duration: 0.2), value: showLyrics)
+        .onChange(of: showLyrics) { _ in updateOverlayState() }
+        .onChange(of: showTracklistDrawer) { _ in updateOverlayState() }
+        .onChange(of: isDraggingOpen) { _ in updateOverlayState() }
+        .onChange(of: activeSheet != nil) { _ in updateOverlayState() }
         
     }
 
@@ -295,36 +310,106 @@ struct NowPlayingView: View {
             Spacer(minLength: 4)
 
             if showLyrics {
-                LyricsView(lyrics: player.lyrics, clock: player.clock)
+                LyricsView(lyrics: player.lyrics, clock: player.clock) { player.seek(to: $0) }
                     .frame(maxWidth: .infinity)
                     .frame(maxHeight: .infinity)
                     .padding(.horizontal, 2)
             } else {
+                let coverTint = ArtworkStore.shared.tint(forKey: song.artworkKey).map { Color(uiColor: $0) } ?? Pun.mango
+                let isOrbiting = player.isPlaying
+                let discOffset: CGFloat = isOrbiting ? (artworkSide * (compact ? 0.105 : 0.145)) : 0
+                let coverShift: CGFloat = isOrbiting ? (-artworkSide * 0.04) : 0
+                let discSize: CGFloat = artworkSide * 0.84
+
+                // Artwork itself has no drag gesture; edge gestures live in edgeGestureOverlays.
                 ZStack {
+                    // Ambient cover-tinted aura
                     RoundedRectangle(cornerRadius: 24, style: .continuous)
-                        .fill(LinearGradient(
-                            colors: [Pun.surfaceRaised.opacity(0.72), Pun.ink.opacity(0.18)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ))
-                        .frame(width: artworkSide + 10, height: artworkSide + 10)
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                                .stroke(Pun.separator.opacity(0.38), lineWidth: 0.75)
+                        .fill(coverTint.opacity(isOrbiting ? (colorScheme == .dark ? 0.34 : 0.20) : 0.10))
+                        .frame(width: artworkSide * 0.92, height: artworkSide * 0.92)
+                        .blur(radius: 30)
+
+                    // Concept A: Kinetic Obsidian Orbital Disc (emerges at 45 deg on Play, eclipses behind cover on Pause)
+                    TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: !isOrbiting || reduceMotion)) { timeline in
+                        let angle = reduceMotion ? 0.0 : (timeline.date.timeIntervalSinceReferenceDate * 28.0).truncatingRemainder(dividingBy: 360.0)
+                        ZStack {
+                            Circle()
+                                .fill(
+                                    RadialGradient(
+                                        colors: [Color(hex: 0x22272A), Color(hex: 0x090B0C)],
+                                        center: .topLeading,
+                                        startRadius: 8,
+                                        endRadius: discSize
+                                    )
+                                )
+                            Circle()
+                                .stroke(Color.white.opacity(0.07), lineWidth: 0.6)
+                                .frame(width: discSize * 0.78, height: discSize * 0.78)
+                            Circle()
+                                .stroke(Color.white.opacity(0.05), lineWidth: 0.6)
+                                .frame(width: discSize * 0.58, height: discSize * 0.58)
+                            // Rotating specular light sheen
+                            Circle()
+                                .fill(
+                                    AngularGradient(
+                                        colors: [
+                                            Color.white.opacity(0.0),
+                                            Color.white.opacity(0.16),
+                                            Color.white.opacity(0.0),
+                                            Pun.amber.opacity(0.14),
+                                            Color.white.opacity(0.0)
+                                        ],
+                                        center: .center
+                                    )
+                                )
+                                .rotationEffect(.degrees(angle))
+                            // Planetary amber core
+                            Circle()
+                                .fill(Pun.amber)
+                                .frame(width: discSize * 0.24, height: discSize * 0.24)
+                            Circle()
+                                .fill(Color(hex: 0x090B0C))
+                                .frame(width: discSize * 0.08, height: discSize * 0.08)
                         }
-                    ArtworkView(key: song.artworkKey, seed: song.album, size: artworkSide, corner: 18)
+                        .frame(width: discSize, height: discSize)
+                        .overlay(Circle().stroke(Color.white.opacity(0.14), lineWidth: 0.75))
+                        .shadow(color: .black.opacity(0.35), radius: 14, x: 4, y: 6)
+                    }
+                    .scaleEffect(isOrbiting ? 1.0 : 0.88)
+                    .offset(x: discOffset, y: -discOffset)
+                    .opacity(isOrbiting ? 1.0 : 0.0)
+
+                    // Foreground Liquid Glass Album Cover
+                    ArtworkView(key: song.artworkKey, seed: song.album, size: artworkSide, corner: 22)
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                                .strokeBorder(
+                                    LinearGradient(
+                                        colors: [
+                                            Color.white.opacity(colorScheme == .dark ? 0.34 : 0.85),
+                                            Pun.amber.opacity(isOrbiting ? 0.28 : 0.06)
+                                        ],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    ),
+                                    lineWidth: 1.0
+                                )
+                        }
                         .id(song.id)
                         .transition(.asymmetric(
                             insertion: .scale(scale: 0.90).combined(with: .opacity),
                             removal: .scale(scale: 1.08).combined(with: .opacity)
                         ))
-                        .animation(.spring(response: 0.35, dampingFraction: 0.80), value: song.id)
+                        .shadow(color: .black.opacity(colorScheme == .dark ? 0.30 : 0.08), radius: 4, y: 2)
                         .shadow(
-                            color: .black.opacity(colorScheme == .dark ? 0.26 : 0.10),
-                            radius: 16,
-                            y: 8
+                            color: .black.opacity(colorScheme == .dark ? 0.44 : 0.16),
+                            radius: isOrbiting ? 22 : 14,
+                            y: isOrbiting ? 12 : 7
                         )
+                        .offset(x: coverShift, y: -coverShift)
                 }
+                .animation(.spring(response: 0.50, dampingFraction: 0.76), value: isOrbiting)
+                .animation(.spring(response: 0.35, dampingFraction: 0.80), value: song.id)
                 .frame(maxWidth: .infinity)
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(Text("Album artwork"))
@@ -407,14 +492,14 @@ struct NowPlayingView: View {
     private var header: some View {
         HStack(spacing: 7) {
             Button {
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 if let onClose { onClose() } else { dismiss() }
             } label: {
                 Image(systemName: "chevron.down")
                     .font(.system(size: 15, weight: .bold))
                     .foregroundStyle(Pun.text)
                     .frame(width: 39, height: 39)
-                    .background(Pun.surface.opacity(0.86), in: Circle())
-                    .overlay(Circle().stroke(Pun.separator.opacity(0.8), lineWidth: 0.75))
+                    .punGlassCard(corner: 19.5, prominent: false)
                     .contentShape(Circle())
             }
             .buttonStyle(.plain)
@@ -500,6 +585,7 @@ struct NowPlayingView: View {
                     prevNudge = -6
                     prevScale = 0.82
                 }
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 player.previous()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
                     withAnimation(.spring(response: 0.22, dampingFraction: 0.65)) {
@@ -533,6 +619,7 @@ struct NowPlayingView: View {
                     nextNudge = 6
                     nextScale = 0.82
                 }
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 player.next()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
                     withAnimation(.spring(response: 0.22, dampingFraction: 0.65)) {
@@ -573,9 +660,9 @@ private struct TrackActionsSheet: View {
 
     var body: some View {
         ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 14) {
                 HStack(spacing: 12) {
-                    ArtworkView(key: song.artworkKey, seed: song.album, size: 52, corner: 10)
+                    ArtworkView(key: song.artworkKey, seed: song.album, size: 54, corner: 12)
                     VStack(alignment: .leading, spacing: 3) {
                         Text("Player actions")
                             .font(Pun.title(.title3))
@@ -587,46 +674,47 @@ private struct TrackActionsSheet: View {
                     }
                     Spacer(minLength: 0)
                 }
-                .padding(.bottom, 4)
+                .padding(.bottom, 2)
 
-                actionButton(symbol: "list.bullet", title: "Album tracks", detail: "Browse tracks from this album", action: onShowTracklist)
-                actionButton(symbol: "text.line.first.and.arrowtriangle.forward", title: "Playing queue", detail: "View and reorder upcoming tracks", action: onShowQueue)
-
-                Menu {
-                    if playlists.isEmpty {
-                        Text("Create a playlist first")
-                    } else {
-                        ForEach(playlists) { playlist in
-                            Button(playlist.name) { onAddToPlaylist(playlist.id) }
-                        }
-                    }
-                } label: {
-                    actionLabel(symbol: "text.badge.plus", title: "Add to playlist", detail: "Save this track to a mix", trailing: "chevron.right")
+                // 3 Quick Mode Tiles (Shuffle, Repeat, Lyrics)
+                HStack(spacing: 10) {
+                    modeTile(
+                        symbol: "shuffle",
+                        title: isShuffleEnabled ? "Shuffle is on" : "Shuffle",
+                        isActive: isShuffleEnabled,
+                        action: onToggleShuffle
+                    )
+                    modeTile(
+                        symbol: repeatMode == .one ? "repeat.1" : "repeat",
+                        title: repeatTitle,
+                        isActive: repeatMode != .off,
+                        action: onCycleRepeat
+                    )
+                    modeTile(
+                        symbol: showLyrics ? "music.note" : "quote.bubble",
+                        title: showLyrics ? "Show artwork" : "Show lyrics",
+                        isActive: showLyrics,
+                        action: onToggleLyrics
+                    )
                 }
-                .buttonStyle(.plain)
 
-                actionButton(
-                    symbol: showLyrics ? "music.note" : "quote.bubble",
-                    title: showLyrics ? "Show artwork" : "Show lyrics",
-                    detail: "Switch between the cover and lyrics",
-                    action: onToggleLyrics
-                )
+                VStack(spacing: 10) {
+                    actionButton(symbol: "list.bullet", title: "Album tracks", detail: "Browse tracks from this album", action: onShowTracklist)
+                    actionButton(symbol: "text.line.first.and.arrowtriangle.forward", title: "Playing queue", detail: "View and reorder upcoming tracks", action: onShowQueue)
 
-                actionButton(
-                    symbol: "shuffle",
-                    title: isShuffleEnabled ? "Shuffle is on" : "Shuffle",
-                    detail: "Change playback order",
-                    trailing: isShuffleEnabled ? "checkmark" : nil,
-                    action: onToggleShuffle
-                )
-
-                actionButton(
-                    symbol: repeatMode == .one ? "repeat.1" : "repeat",
-                    title: repeatTitle,
-                    detail: "Change repeat mode",
-                    trailing: repeatMode != .off ? "checkmark" : nil,
-                    action: onCycleRepeat
-                )
+                    Menu {
+                        if playlists.isEmpty {
+                            Text("Create a playlist first")
+                        } else {
+                            ForEach(playlists) { playlist in
+                                Button(playlist.name) { onAddToPlaylist(playlist.id) }
+                            }
+                        }
+                    } label: {
+                        actionLabel(symbol: "text.badge.plus", title: "Add to playlist", detail: "Save this track to a mix", trailing: "chevron.right")
+                    }
+                    .buttonStyle(.plain)
+                }
             }
             .padding(.horizontal, 20)
             .padding(.top, 22)
@@ -643,6 +731,41 @@ private struct TrackActionsSheet: View {
         case .all: return "Repeat one"
         case .one: return "Disable repeat"
         }
+    }
+
+    private func modeTile(
+        symbol: String,
+        title: LocalizedStringKey,
+        isActive: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            action()
+        } label: {
+            VStack(spacing: 7) {
+                Image(systemName: symbol)
+                    .font(.system(size: 17, weight: .bold))
+                    .foregroundStyle(isActive ? Color.black : Pun.mango)
+                Text(title)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(isActive ? Color.black : Pun.text)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .padding(.horizontal, 6)
+            .background(
+                isActive ? Pun.amber : Pun.surfaceRaised,
+                in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .strokeBorder(Color.white.opacity(isActive ? 0.30 : 0.10), lineWidth: 0.75)
+            }
+        }
+        .buttonStyle(.plain)
     }
 
     private func actionButton(
@@ -669,7 +792,7 @@ private struct TrackActionsSheet: View {
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(Pun.mango)
                 .frame(width: 40, height: 40)
-                .background(Pun.mango.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .background(Pun.mango.opacity(0.14), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
                     .font(Pun.body(.semibold))
@@ -691,8 +814,8 @@ private struct TrackActionsSheet: View {
         }
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Pun.surfaceRaised.opacity(0.68), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
-        .contentShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
+        .punGlassCard(corner: 16, prominent: false)
+        .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 }
 
@@ -720,7 +843,7 @@ struct SeekBar: View {
             GeometryReader { geometry in
                 let inset: CGFloat = 6
                 let trackWidth = max(1, geometry.size.width - inset * 2)
-                WaveformProgressVisual(amplitudes: waveform, fraction: fraction, height: 31, showsThumb: true)
+                WaveformProgressVisual(amplitudes: waveform, fraction: fraction, height: 31, showsThumb: true, scrubFraction: scrubbing ? fraction : nil)
                     .contentShape(Rectangle())
                     .gesture(
                         DragGesture(minimumDistance: 0, coordinateSpace: .local)
@@ -796,6 +919,7 @@ struct SeekBar: View {
 struct LyricsView: View {
     let lyrics: SynchronizedLyrics?
     @ObservedObject var clock: PlaybackClock
+    var onSeek: ((TimeInterval) -> Void)? = nil
 
     var body: some View {
         if let lyrics {
@@ -804,13 +928,28 @@ struct LyricsView: View {
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 18) {
                         ForEach(Array(lyrics.lines.enumerated()), id: \.offset) { pair in
-                            Text(pair.element.text.isEmpty ? "♪" : pair.element.text)
-                                .font(Pun.title(.title3))
-                                .multilineTextAlignment(.center)
-                                .foregroundStyle(pair.offset == current ? Pun.text : Pun.textDim.opacity(0.6))
-                                .frame(maxWidth: .infinity)
-                                .fixedSize(horizontal: false, vertical: true)
-                                .id(pair.offset)
+                            let isActive = (pair.offset == current)
+                            let distance = abs(pair.offset - current)
+                            let dimOpacity = max(0.28, 0.72 - Double(min(distance, 4)) * 0.11)
+                            Button {
+                                if let onSeek {
+                                    UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+                                    onSeek(Double(pair.element.timeMs) / 1000.0)
+                                }
+                            } label: {
+                                Text(pair.element.text.isEmpty ? "♪" : pair.element.text)
+                                    .font(Pun.title(.title3))
+                                    .multilineTextAlignment(.center)
+                                    .foregroundStyle(isActive ? Pun.text : Pun.textDim.opacity(dimOpacity))
+                                    .scaleEffect(isActive ? 1.03 : 0.97)
+                                    .frame(maxWidth: .infinity)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .padding(.vertical, 2)
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .animation(.easeInOut(duration: 0.24), value: isActive)
+                            .id(pair.offset)
                         }
                     }
                     .padding(.horizontal, 8)
@@ -818,7 +957,7 @@ struct LyricsView: View {
                     .frame(maxWidth: .infinity)
                 }
                 .onChange(of: current) { value in
-                    withAnimation(.easeInOut(duration: 0.4)) {
+                    withAnimation(.easeInOut(duration: 0.38)) {
                         proxy.scrollTo(value, anchor: .center)
                     }
                 }

@@ -6,7 +6,7 @@
 
 <p align="center">
   <b>A fast, private, artwork-first local music player for iPhone.</b><br>
-  Built with Swift &amp; SwiftUI &middot; Zero tracking &middot; Pure local audio &middot; GNU GPLv3 &middot; <b>0.1.2 Beta</b>
+  Built with Swift &amp; SwiftUI &middot; Zero tracking &middot; Pure local audio &middot; GNU GPLv3 &middot; <b>0.2 Beta</b>
 </p>
 
 <p align="center">
@@ -28,7 +28,7 @@ Drop your albums into the Files app, import via AirDrop, or pick documents from 
 
 ---
 
-## Features & Highlights (0.1 Beta)
+## Features & Highlights (0.2 Beta)
 
 ### Liquid Glass & Classic App Icons
 Crafted from the Apple Icon Composer specification with translucent amber glass, an inner-specular dark planet, and a warm cream gradient. Switch freely between **Liquid Glass** (default) and **Classic** anytime in **Settings -> Personalization -> App icon**.
@@ -36,7 +36,7 @@ Crafted from the Apple Icon Composer specification with translucent amber glass,
 ### PunPun Interactive Mascot Companion
 Meet **PunPun** -- an optional interactive mascot who lives right inside the player and mini-player (enable in **Settings -> PunPun**):
 - **Rhythm-Aware Dance:** Driven by `WaveformRhythmAnalyzer`, PunPun reads local RMS energy and onset flux from the decoded audio signal to sway calmly during quiet passages and groove during upbeat choruses.
-- **Sleep & Tap Reactions:** Curls up to nap when playback is paused, and shows his happy love pose with floating hearts and soft haptics when tapped.
+- **Sleep on Pause:** Calmly curls up to nap when playback is paused and wakes up in sync with the music.
 - **Animated Mini-Faces:** Expressive mini-badges in the mini-player and Settings that blink, wink, and smile.
 
 ### Signature 3D Orbit Transport
@@ -102,7 +102,7 @@ PunPlayer/
 ## Installation
 
 ### Option 1: Sideloading (Recommended)
-1. Download the latest `PunPlayer-0.1.2.ipa` from [GitHub Releases](https://github.com/Quancore21/PunPlayer/releases).
+1. Download the latest `PunPlayer-0.2.ipa` from [GitHub Releases](https://github.com/Quancore21/PunPlayer/releases).
 2. Sideload it using [AltStore](https://altstore.io/), [Sideloadly](https://sideloadly.io/), or [TrollStore](https://github.com/opa334/TrollStore).
 3. Sign in with your Apple ID when prompted to generate a free personal provisioning profile.
 

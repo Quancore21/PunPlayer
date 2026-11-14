@@ -5,21 +5,8 @@
 //
 
 import SwiftUI
+import UIKit
 
-/// Signature Play/Pause button for PunPlayer.
-///
-/// Implements a continuous 60-120 FPS 3D orbital trajectory:
-/// - Frame 1: Amber button with play/pause glyph at rest.
-/// - Frame 2 (progress ~0.22): Amber satellite departs to upper-right (45°) in front of the central
-///   dark planet, forming the PunPlayer mark.
-/// - Frame 3 (progress ~0.22..0.60): Satellite sweeps behind the black planet along a circular orbital arc to lower-left (225°).
-///   The black planet physically occludes it in 3D perspective; only the outer crescent peeks out.
-/// - Frame 4 (progress ~0.60..0.72): Satellite swings around the lower-left axis, emerging IN FRONT of the black planet (215°).
-/// - Frame 5 (progress ~0.72..1.00): Satellite returns along the axis (↗) into the center, the black planet contracts,
-///   and the button settles at rest with the new glyph.
-///
-/// Driven by TimelineView(.animation) for genuine 60-120 FPS ProMotion hardware smoothness.
-/// Playback toggle is triggered immediately on tap — the animation never delays transport.
 struct OrbitPlayPauseButton: View {
     let isActive: Bool
     var isBuffering = false
@@ -44,7 +31,6 @@ struct OrbitPlayPauseButton: View {
     private var centreDiameter: CGFloat { size * 0.78 }
     private var orbitRadius: CGFloat { centreDiameter * 0.48 }
 
-    /// Converts an angle in degrees (0 = top, clockwise) to an offset for the orbit radius.
     private func offsetForAngle(_ degrees: Double) -> CGSize {
         let radians = degrees * .pi / 180
         return CGSize(width: orbitRadius * sin(radians),
@@ -61,10 +47,11 @@ struct OrbitPlayPauseButton: View {
         }
     }
 
-    private let animDuration: TimeInterval = 0.38
+    private let animDuration: TimeInterval = 0.42
 
     var body: some View {
         Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
             action()
             triggerOrbit()
         } label: {
@@ -75,41 +62,53 @@ struct OrbitPlayPauseButton: View {
 
                 ZStack {
                     // LAYER 0: Satellite BEHIND the black planet (Frame 3)
-                    // Rendered underneath the black planet so the planet physically occludes it in 3D.
                     Circle()
                         .fill(Pun.amber)
-                        .overlay(Circle().stroke(Color.white.opacity(0.18), lineWidth: 0.75))
+                        .overlay(Circle().stroke(Color.white.opacity(0.22), lineWidth: 0.75))
                         .frame(width: size, height: size)
                         .scaleEffect(state.satelliteScale)
                         .offset(state.offset)
                         .opacity(state.isBehind ? 1 : 0)
                         .allowsHitTesting(false)
 
-                    // LAYER 1: Central black planet (emerges in Frames 2, 3, 4)
+                    // LAYER 1: Central black planet
                     Circle()
-                        .fill(Color.black)
+                        .fill(
+                            RadialGradient(
+                                colors: [Color(hex: 0x1A1E20), Color.black],
+                                center: .topLeading,
+                                startRadius: 2,
+                                endRadius: centreDiameter
+                            )
+                        )
+                        .overlay(Circle().stroke(Color.white.opacity(0.10), lineWidth: 0.6))
                         .frame(width: centreDiameter, height: centreDiameter)
                         .scaleEffect(state.planetScale)
                         .opacity(state.planetOpacity)
                         .shadow(
-                            color: Color.black.opacity(state.planetOpacity * 0.45),
-                            radius: 6,
-                            y: 2
+                            color: Color.black.opacity(state.planetOpacity * 0.50),
+                            radius: 8,
+                            y: 3
                         )
                         .allowsHitTesting(false)
 
-                    // LAYER 2: Satellite / Button IN FRONT of the black planet (Frames 1, 2, 4, 5)
+                    // LAYER 2: Satellite / Button IN FRONT of the black planet
                     ZStack {
                         Circle()
-                            .fill(Pun.amber)
-                            .overlay(Circle().stroke(Color.white.opacity(0.2), lineWidth: 0.75))
+                            .fill(
+                                LinearGradient(
+                                    colors: [Color(hex: 0xFFBE42), Pun.amber],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .overlay(Circle().stroke(Color.white.opacity(0.28), lineWidth: 0.85))
                             .shadow(
-                                color: Pun.amber.opacity(state.isTransitioning ? 0.55 : 0.35),
-                                radius: 8,
+                                color: Pun.amber.opacity(state.isTransitioning ? 0.62 : 0.36),
+                                radius: state.isTransitioning ? 12 : 9,
                                 y: 3
                             )
 
-                        // Transport glyph (play / pause)
                         Group {
                             if isBuffering {
                                 ProgressView().tint(Color.black)
@@ -155,7 +154,7 @@ struct OrbitPlayPauseButton: View {
         animStartTime = Date()
         isAnimating = true
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + animDuration * 0.7) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + animDuration * 0.72) {
             guard animationToken == currentToken else { return }
             if isAnimating { phase = .depart }
         }
@@ -194,45 +193,47 @@ struct OrbitPlayPauseButton: View {
         let pScale: CGFloat
         let pOpacity: Double
 
-        if progress <= 0.22 {
-            // Frame 1 → Frame 2: Depart to upper-right (45°)
-            let sub = progress / 0.22
+        if progress <= 0.24 {
+            // Frame 1 -> Frame 2: Elastic launch to upper-right (45 deg)
+            let sub = progress / 0.24
             let eased = sin(sub * .pi / 2)
             let target = offsetForAngle(45)
             offset = CGSize(width: target.width * eased, height: target.height * eased)
-            scale = 1.0 - eased * 0.36 // 1.0 → 0.64
+            scale = 1.0 - eased * 0.36
             isBehind = false
-            pScale = min(1.0, eased * 1.1)
-            pOpacity = min(1.0, sub / 0.15)
-        } else if progress <= 0.60 {
-            // Frame 2 → Frame 3: Continuous 3D orbital sweep behind black planet (45° → 225°)
-            let sub = (progress - 0.22) / (0.60 - 0.22)
-            let angle = 45.0 + sub * 180.0
+            pScale = min(1.04, eased * 1.12)
+            pOpacity = min(1.0, sub / 0.14)
+        } else if progress <= 0.62 {
+            // Frame 2 -> Frame 3: Keplerian orbital sweep behind dark planet (45 deg -> 225 deg)
+            let sub = (progress - 0.24) / (0.62 - 0.24)
+            let kepler = sub - 0.08 * sin(sub * .pi * 2.0)
+            let angle = 45.0 + kepler * 180.0
             offset = offsetForAngle(angle)
-            let depthDip = sin(sub * .pi) * 0.16
-            scale = 0.64 - depthDip // 0.64 → 0.48 → 0.60
+            let depthDip = sin(sub * .pi) * 0.18
+            scale = 0.64 - depthDip
             isBehind = true
             pScale = 1.0
             pOpacity = 1.0
-        } else if progress <= 0.72 {
-            // Frame 3 → Frame 4: Axis turn at lower-left to front (225° → 215°)
-            let sub = (progress - 0.60) / (0.72 - 0.60)
-            let angle = 225.0 - sub * 10.0
+        } else if progress <= 0.74 {
+            // Frame 3 -> Frame 4: Crisp axis turn at lower-left to front (225 deg -> 212 deg)
+            let sub = (progress - 0.62) / (0.74 - 0.62)
+            let angle = 225.0 - sub * 13.0
             offset = offsetForAngle(angle)
             scale = 0.60 + sub * 0.04
             isBehind = false
             pScale = 1.0
             pOpacity = 1.0
         } else {
-            // Frame 4 → Frame 5: Return along diagonal axis (↗) into center
-            let sub = (progress - 0.72) / (1.00 - 0.72)
-            let eased = sub * sub
-            let start = offsetForAngle(215)
+            // Frame 4 -> Frame 5: Magnetic return along diagonal axis into center
+            let sub = (progress - 0.74) / (1.00 - 0.74)
+            let eased = sub * sub * (3.0 - 2.0 * sub)
+            let start = offsetForAngle(212)
             offset = CGSize(width: start.width * (1.0 - eased), height: start.height * (1.0 - eased))
-            scale = 0.64 + eased * 0.36 // 0.64 → 1.0
+            let dockPulse = sub > 0.75 ? sin(((sub - 0.75) / 0.25) * .pi) * 0.04 : 0.0
+            scale = 0.64 + eased * 0.36 + dockPulse
             isBehind = false
             pScale = max(0.01, 1.0 - eased)
-            pOpacity = max(0.0, 1.0 - eased * 1.2)
+            pOpacity = max(0.0, 1.0 - eased * 1.25)
         }
 
         return OrbitFrameState(

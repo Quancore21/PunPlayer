@@ -1,7 +1,7 @@
 //
 //  PunPlayer -- UI/PunPunCompanionView.swift
-//  60 FPS rhythm-reactive PunPun mascot with pure Row-1 pose consistency,
-//  accurate slow/fast section pacing, and crisp physical hop on tap.
+//  60 FPS rhythm-reactive PunPun mascot with pure Row-1 pose consistency.
+//  Tap interaction is disabled so the mascot remains purely music-reactive.
 //  PunPlayer is licensed under GPLv3.
 //
 
@@ -17,7 +17,7 @@ enum WaveformRhythmAnalyzer {
 
     static func analyze(waveform: [Float], position: TimeInterval, duration: TimeInterval) -> Profile {
         guard !waveform.isEmpty, duration > 0, position.isFinite else {
-            return Profile(energy: 0.42, flux: 0.14, groove: 0.45)
+            return Profile(energy: 0.40, flux: 0.12, groove: 0.42)
         }
         let count = waveform.count
         let ratio = min(max(position / duration, 0.0), 0.9999)
@@ -26,32 +26,30 @@ enum WaveformRhythmAnalyzer {
         let nextIdx = min(center + 1, count - 1)
         let frac = exact - Double(center)
 
-        // Undo 0.62 perceptual gamma so quiet sections are genuinely low-energy and loud sections stand out
         let instantRaw = Double(waveform[center]) * (1.0 - frac) + Double(waveform[nextIdx]) * frac
-        let instantLin = pow(min(max(instantRaw, 0.0), 1.0), 1.45)
+        let instantLin = pow(min(max(instantRaw, 0.0), 1.0), 1.50)
 
         let weights: [Double] = [0.10, 0.22, 0.36, 0.22, 0.10]
         var windowLin = 0.0
         for offset in -2...2 {
             let idx = min(max(center + offset, 0), count - 1)
-            let val = pow(min(max(Double(waveform[idx]), 0.0), 1.0), 1.45)
+            let val = pow(min(max(Double(waveform[idx]), 0.0), 1.0), 1.50)
             windowLin += val * weights[offset + 2]
         }
         let localEnergy = instantLin * 0.50 + windowLin * 0.50
 
-        // Local rhythmic pulse (flux) across surrounding buckets
         var fluxSum = 0.0
         var fluxCount = 0.0
         for offset in -2...2 {
             let i1 = min(max(center + offset, 1), count - 1)
-            let a1 = pow(min(max(Double(waveform[i1]), 0.0), 1.0), 1.45)
-            let a0 = pow(min(max(Double(waveform[i1 - 1]), 0.0), 1.0), 1.45)
-            fluxSum += abs(a1 - a0)
+            let a1 = pow(min(max(Double(waveform[i1]), 0.0), 1.0), 1.50)
+            let a0 = pow(min(max(Double(waveform[i1 - 1]), 0.0), 1.0), 1.50)
+            fluxSum += max(0.0, a1 - a0)
             fluxCount += 1.0
         }
         let avgFlux = fluxCount > 0 ? (fluxSum / fluxCount) : 0.0
 
-        let groove = min(1.0, max(0.08, localEnergy * 0.76 + avgFlux * 1.65))
+        let groove = min(1.0, max(0.08, localEnergy * 0.78 + avgFlux * 1.75))
         return Profile(energy: localEnergy, flux: avgFlux, groove: groove)
     }
 }
@@ -61,7 +59,7 @@ private final class DanceClock {
     var lastClockPos: TimeInterval = -1
     var lastSyncWallTime: TimeInterval = 0
     var beatPhase: Double = 0
-    var smoothedGroove: Double = 0.40
+    var smoothedGroove: Double = 0.38
 
     func step(
         now: TimeInterval,
@@ -83,18 +81,17 @@ private final class DanceClock {
         let profile = WaveformRhythmAnalyzer.analyze(waveform: waveform, position: livePos, duration: duration)
 
         let target = isPlaying ? profile.groove : 0.0
-        let rate = (target > smoothedGroove) ? 5.5 : 3.0
+        let rate = (target > smoothedGroove) ? 5.0 : 2.8
         smoothedGroove += (target - smoothedGroove) * min(1.0, dt * rate)
 
-        // Clear tempo adaptation: 1.25 steps/sec on slow/quiet sections up to 3.25 steps/sec on energetic beats
         let stepsPerSecond: Double
         if !isPlaying {
-            stepsPerSecond = 0.90
+            stepsPerSecond = 0.85
         } else if smoothedGroove < 0.28 {
-            stepsPerSecond = 1.25 + (smoothedGroove / 0.28) * 0.45
+            stepsPerSecond = 1.15 + (smoothedGroove / 0.28) * 0.45
         } else {
             let norm = (smoothedGroove - 0.28) / 0.72
-            stepsPerSecond = 1.70 + norm * 1.55
+            stepsPerSecond = 1.60 + norm * 1.45
         }
 
         beatPhase += dt * stepsPerSecond
@@ -112,10 +109,7 @@ struct PunPunCompanionView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var driver = DanceClock()
     @State private var waveform: [Float] = []
-    @State private var tapReactionUntil: Date = .distantPast
-    @State private var tapStartedAt: Date = .distantPast
 
-    // Pure Row-1 6-step ping-pong dance loop: identical head, beak, and headphone proportions.
     private static let row1DanceSequence: [String] = [
         "punpun_chill_1",
         "punpun_dance_1",
@@ -133,7 +127,6 @@ struct PunPunCompanionView: View {
     var body: some View {
         TimelineView(.animation(minimumInterval: reduceMotion ? 0.25 : 1.0 / 60.0, paused: false)) { timeline in
             let now = timeline.date.timeIntervalSinceReferenceDate
-            let isReacting = timeline.date < tapReactionUntil
             let (phase, groove) = driver.step(
                 now: now,
                 isPlaying: isPlaying,
@@ -141,7 +134,7 @@ struct PunPunCompanionView: View {
                 duration: clock.duration,
                 waveform: waveform
             )
-            let motion = evaluateMotion(nowDate: timeline.date, phase: phase, groove: groove, isReacting: isReacting)
+            let motion = evaluateMotion(phase: phase, groove: groove)
 
             ZStack(alignment: .bottom) {
                 Ellipse()
@@ -160,14 +153,8 @@ struct PunPunCompanionView: View {
                     .offset(x: motion.shiftX, y: motion.bounceY)
             }
             .frame(width: size + 10, height: size + 8)
-            .contentShape(Rectangle())
-            .onTapGesture {
-                UIImpactFeedbackGenerator(style: .soft).impactOccurred()
-                let current = Date()
-                tapStartedAt = current
-                tapReactionUntil = current.addingTimeInterval(0.68)
-            }
         }
+        .allowsHitTesting(false)
         .task(id: waveformTaskID) {
             guard let song else {
                 waveform = []
@@ -192,31 +179,13 @@ struct PunPunCompanionView: View {
         let shadowWidth: CGFloat
     }
 
-    private func evaluateMotion(nowDate: Date, phase: Double, groove: Double, isReacting: Bool) -> MotionFrame {
-        if isReacting {
-            // Crisp 0.68s double-hop using consistent Row-1 sprites (no punpun_love / punpun_wink distortion)
-            let elapsed = min(max(0.0, nowDate.timeIntervalSince(tapStartedAt)), 0.68)
-            let t = elapsed / 0.68
-            let hop = abs(sin(t * .pi * 2.0))
-            let wiggle = sin(t * .pi * 2.0)
-            let frame = (hop > 0.35) ? "punpun_dance_2" : "punpun_dance_1"
-            return MotionFrame(
-                frameName: frame,
-                scaleX: reduceMotion ? 1.0 : CGFloat(1.0 - hop * 0.035),
-                scaleY: reduceMotion ? 1.0 : CGFloat(1.0 + hop * 0.045),
-                tiltDegrees: reduceMotion ? 0 : wiggle * 5.5,
-                shiftX: reduceMotion ? 0 : CGFloat(wiggle * 2.0),
-                bounceY: reduceMotion ? 0 : CGFloat(-hop * 6.5),
-                shadowWidth: CGFloat(0.60 - hop * 0.14)
-            )
-        }
-
+    private func evaluateMotion(phase: Double, groove: Double) -> MotionFrame {
         guard song != nil, isPlaying else {
             let breath = sin(phase * .pi)
             return MotionFrame(
                 frameName: "punpun_sleep",
-                scaleX: reduceMotion ? 1.0 : CGFloat(1.0 + breath * 0.018),
-                scaleY: reduceMotion ? 1.0 : CGFloat(1.0 - breath * 0.020),
+                scaleX: reduceMotion ? 1.0 : CGFloat(1.0 + breath * 0.016),
+                scaleY: reduceMotion ? 1.0 : CGFloat(1.0 - breath * 0.018),
                 tiltDegrees: 0,
                 shiftX: 0,
                 bounceY: 1,
@@ -230,16 +199,16 @@ struct PunPunCompanionView: View {
         let bounceArc = sin(sub * .pi)
         let squashCos = cos(sub * .pi * 2.0)
         let sway = sin(phase * .pi * 0.5)
-        let power = min(1.0, max(0.28, groove))
+        let power = min(1.0, max(0.25, groove))
 
         return MotionFrame(
             frameName: seq[stepIndex],
-            scaleX: reduceMotion ? 1.0 : CGFloat(1.0 + squashCos * 0.028 * power),
-            scaleY: reduceMotion ? 1.0 : CGFloat(1.0 - squashCos * 0.034 * power),
-            tiltDegrees: reduceMotion ? 0 : sway * (3.6 * power),
-            shiftX: reduceMotion ? 0 : CGFloat(sway * (2.2 * power)),
-            bounceY: reduceMotion ? 0 : CGFloat(-bounceArc * (4.6 * power)),
-            shadowWidth: CGFloat(0.62 - bounceArc * 0.10 * power)
+            scaleX: reduceMotion ? 1.0 : CGFloat(1.0 + squashCos * 0.024 * power),
+            scaleY: reduceMotion ? 1.0 : CGFloat(1.0 - squashCos * 0.028 * power),
+            tiltDegrees: reduceMotion ? 0 : sway * (3.0 * power),
+            shiftX: reduceMotion ? 0 : CGFloat(sway * (1.8 * power)),
+            bounceY: reduceMotion ? 0 : CGFloat(-bounceArc * (3.8 * power)),
+            shadowWidth: CGFloat(0.62 - bounceArc * 0.09 * power)
         )
     }
 }
@@ -249,7 +218,6 @@ struct PunPunMiniFaceView: View {
     var size: CGFloat = 28
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var tapWinkUntil: Date = .distantPast
 
     private static let expressions = [
         "punpun_face_1",
@@ -261,9 +229,8 @@ struct PunPunMiniFaceView: View {
     var body: some View {
         TimelineView(.animation(minimumInterval: reduceMotion ? 0.6 : (isPlaying ? 0.15 : 0.45), paused: false)) { timeline in
             let now = timeline.date.timeIntervalSinceReferenceDate
-            let isTapped = timeline.date < tapWinkUntil
-            let face = pickFace(now: now, isTapped: isTapped)
-            let tilt = (!reduceMotion && isPlaying) ? sin(now * 2.4) * 2.2 : 0.0
+            let face = pickFace(now: now)
+            let tilt = (!reduceMotion && isPlaying) ? sin(now * 2.3) * 2.0 : 0.0
 
             Image(face)
                 .resizable()
@@ -272,20 +239,12 @@ struct PunPunMiniFaceView: View {
                 .scaledToFit()
                 .frame(width: size, height: size)
                 .rotationEffect(.degrees(tilt))
-                .scaleEffect(isTapped ? 1.10 : 1.0)
-                .onTapGesture {
-                    let generator = UIImpactFeedbackGenerator(style: .light)
-                    generator.impactOccurred()
-                    tapWinkUntil = Date().addingTimeInterval(1.1)
-                }
         }
+        .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
 
-    private func pickFace(now: TimeInterval, isTapped: Bool) -> String {
-        if isTapped {
-            return "punpun_face_3"
-        }
+    private func pickFace(now: TimeInterval) -> String {
         guard isPlaying else {
             let cycle = now.truncatingRemainder(dividingBy: 5.2)
             return (cycle > 4.85) ? "punpun_face_3" : "punpun_face_1"

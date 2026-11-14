@@ -89,6 +89,7 @@ struct AlbumTracklistSheet: View {
                         }
                         .padding(.vertical, 6)
                         .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
                     }
 
                     Section("Tracks") {
@@ -98,18 +99,32 @@ struct AlbumTracklistSheet: View {
                                 player.play(songs: tracks, start: song, title: currentSong.album)
                                 closeSheet()
                             } label: {
+                                let isCurrent = (player.currentSong?.id == song.id)
                                 HStack(spacing: 11) {
                                     Text(song.trackNumber > 0 ? String(format: "%02d", song.trackNumber) : String(format: "%02d", index + 1))
                                         .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                                        .foregroundStyle(player.currentSong?.id == song.id ? Pun.mango : Pun.textDim)
+                                        .foregroundStyle(isCurrent ? Pun.mango : Pun.textDim)
                                         .frame(width: 23, alignment: .trailing)
-                                    SongRow(song: song, isCurrent: player.currentSong?.id == song.id)
+                                    SongRow(song: song, isCurrent: isCurrent, showsArtwork: false)
+                                }
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 13, style: .continuous)
+                                        .fill(isCurrent ? Pun.mango.opacity(0.12) : Color.clear)
+                                )
+                                .overlay {
+                                    if isCurrent {
+                                        RoundedRectangle(cornerRadius: 13, style: .continuous)
+                                            .strokeBorder(Pun.mango.opacity(0.28), lineWidth: 0.75)
+                                    }
                                 }
                                 .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
                             .modifier(SongMenu(song: song))
                             .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
                             .id(song.id)
                         }
                     }

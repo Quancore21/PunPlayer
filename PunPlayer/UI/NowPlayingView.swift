@@ -1,7 +1,7 @@
 //
 //  PunPlayer — UI/NowPlayingView.swift
-//  Full-screen, artwork-first player with Multi-Layered Glass Prism depth,
-//  directional 3D track-switch choreography, and guarded edge gestures.
+//  Full-screen, artwork-first player with hardware-timed 3D album-change deck emergence,
+//  clean zero-artifact resting cover, and guarded edge gestures.
 //  PunPlayer is licensed under GPLv3.
 //
 
@@ -45,36 +45,79 @@ struct NowPlayingView: View {
     @State private var drawerDragOffset: CGFloat = 0
     @State private var isDraggingOpen = false
     @State private var drawerAnimationToken: Int = 0
+    @State private var canTriggerAmbientActions = true
 
     @State private var prevNudge: CGFloat = 0
     @State private var prevScale: CGFloat = 1.0
     @State private var nextNudge: CGFloat = 0
     @State private var nextScale: CGFloat = 1.0
 
-    // Directional 3D track-switch choreography state
-    @State private var transitionDirection: Double = 1.0
-    @State private var cardSwingAngle: Double = 0.0
-    @State private var cardSlideOffset: CGFloat = 0.0
-    @State private var cardDepthScale: CGFloat = 1.0
+    // Hardware-timed Track & Album transition state (immune to SwiftUI @State coalescing)
+    @State private var lastObservedSong: Song?
+    @State private var outgoingCoverSong: Song?
+    @State private var isAnimatingAlbumSwitch = false
+    @State private var albumSwitchStartTime: Date = .distantPast
+    @State private var isAnimatingTitleSwitch = false
+    @State private var titleSwitchStartTime: Date = .distantPast
+    @State private var activeSwitchDirection: Double = 1.0
+    @State private var pendingDirection: Double = 1.0
+    @State private var transitionToken: Int = 0
+
+    private let albumSwitchDuration: TimeInterval = 0.56
+    private let titleSwitchDuration: TimeInterval = 0.34
 
     private func updateOverlayState() {
         isOverlayActive = showLyrics || showTracklistDrawer || isDraggingOpen || (activeSheet != nil)
     }
 
-    private func triggerTrackSwitchAnimation(direction: Double) {
-        guard !reduceMotion else { return }
-        transitionDirection = direction
-        withAnimation(.spring(response: 0.11, dampingFraction: 0.62)) {
-            cardSwingAngle = direction * 12.0
-            cardSlideOffset = CGFloat(direction * 22.0)
-            cardDepthScale = 0.93
+    private func handleSongChange(to newSong: Song?) {
+        guard let newSong else {
+            lastObservedSong = nil
+            outgoingCoverSong = nil
+            isAnimatingAlbumSwitch = false
+            isAnimatingTitleSwitch = false
+            return
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.11) {
-            withAnimation(.spring(response: 0.42, dampingFraction: 0.76)) {
-                cardSwingAngle = 0.0
-                cardSlideOffset = 0.0
-                cardDepthScale = 1.0
+        guard let oldSong = lastObservedSong else {
+            lastObservedSong = newSong
+            return
+        }
+        guard oldSong.id != newSong.id else { return }
+        lastObservedSong = newSong
+
+        let dir = pendingDirection
+        pendingDirection = 1.0
+        guard !reduceMotion else { return }
+
+        transitionToken += 1
+        let token = transitionToken
+        activeSwitchDirection = dir
+        let now = Date()
+
+        // Always animate title & artist slide on track change
+        titleSwitchStartTime = now
+        isAnimatingTitleSwitch = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + titleSwitchDuration + 0.02) {
+            guard self.transitionToken == token else { return }
+            self.isAnimatingTitleSwitch = false
+        }
+
+        // Trigger 3D Prism Deck emergence ONLY when switching to a different album or cover
+        let isDifferentAlbumOrCover = (oldSong.artworkKey != newSong.artworkKey)
+            || (oldSong.album.localizedCaseInsensitiveCompare(newSong.album) != .orderedSame)
+
+        if isDifferentAlbumOrCover {
+            outgoingCoverSong = oldSong
+            albumSwitchStartTime = now
+            isAnimatingAlbumSwitch = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + albumSwitchDuration + 0.03) {
+                guard self.transitionToken == token else { return }
+                self.isAnimatingAlbumSwitch = false
+                self.outgoingCoverSong = nil
             }
+        } else {
+            isAnimatingAlbumSwitch = false
+            outgoingCoverSong = nil
         }
     }
 
@@ -116,18 +159,24 @@ struct NowPlayingView: View {
             let progress = max(0, min(1.0, 1.0 - Double(currentOffset / drawerWidth)))
 
             ZStack {
-                if let song = player.currentSong {
-                    playerContent(song: song, screen: stableSize)
-                } else {
-                    emptyContent
+                Group {
+                    if let song = player.currentSong {
+                        playerContent(song: song, screen: stableSize)
+                    } else {
+                        emptyContent
+                    }
                 }
+                // Fade & blur main player when Album Tracklist Drawer slides over so text never bleeds on the left
+                .scaleEffect(1.0 - CGFloat(progress) * 0.04)
+                .blur(radius: CGFloat(progress) * 10.0)
+                .opacity(1.0 - progress * 0.92)
 
                 // Edge gesture overlays — transparent hit targets at screen edges.
                 // Placed outside interactive control zones so buttons always receive taps.
                 edgeGestureOverlays(size: stableSize)
 
                 if isDrawerVisible, let song = player.currentSong {
-                    Color.black.opacity(0.68 * progress)
+                    Color.black.opacity(0.76 * progress)
                         .ignoresSafeArea()
                         .onTapGesture {
                             dismissTracklistDrawer(width: drawerWidth)
@@ -145,10 +194,17 @@ struct NowPlayingView: View {
                         )
                         .frame(width: drawerWidth)
                         .background(Pun.ink)
-                        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                        .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
                         .overlay {
-                            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                                .stroke(Pun.separator.opacity(0.6), lineWidth: 0.75)
+                            RoundedRectangle(cornerRadius: 26, style: .continuous)
+                                .strokeBorder(
+                                    LinearGradient(
+                                        colors: [Color.white.opacity(0.22), Pun.separator.opacity(0.6)],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    ),
+                                    lineWidth: 0.85
+                                )
                         }
                         .shadow(color: .black.opacity(0.55 * progress), radius: 24, x: -6)
                         .offset(x: currentOffset)
@@ -179,14 +235,19 @@ struct NowPlayingView: View {
             .background { artworkBackground }
             .toolbar(.hidden, for: .navigationBar)
             .navigationBarBackButtonHidden()
-            // Ambient swipe-up gesture for the whole player: strictly guarded by isExpanded
-            // so closing the player or interacting with Home never triggers TrackActionsSheet.
+            // Ambient swipe-up gesture for the whole player: strictly guarded by isExpanded and canTriggerAmbientActions
             .simultaneousGesture(
                 DragGesture(minimumDistance: 36)
+                    .onChanged { _ in
+                        if !isExpanded || showTracklistDrawer || showLyrics || activeSheet != nil {
+                            canTriggerAmbientActions = false
+                        }
+                    }
                     .onEnded { value in
-                        guard isExpanded, activeSheet == nil, !showTracklistDrawer, !showLyrics else { return }
+                        defer { canTriggerAmbientActions = true }
+                        guard isExpanded, canTriggerAmbientActions, activeSheet == nil, !showTracklistDrawer, !showLyrics else { return }
                         guard value.startLocation.y > metrics.playerTopPadding + 70 else { return }
-                        if value.translation.height < -52 && abs(value.translation.height) > abs(value.translation.width) * 1.35 {
+                        if value.translation.height < -56 && abs(value.translation.height) > abs(value.translation.width) * 1.4 {
                             activeSheet = .actions
                         }
                     }
@@ -243,23 +304,27 @@ struct NowPlayingView: View {
             .presentationDragIndicator(.visible)
         }
         .animation(.easeInOut(duration: 0.2), value: showLyrics)
+        .onAppear {
+            lastObservedSong = player.currentSong
+        }
         .onChange(of: showLyrics) { _ in updateOverlayState() }
         .onChange(of: showTracklistDrawer) { _ in updateOverlayState() }
         .onChange(of: isDraggingOpen) { _ in updateOverlayState() }
         .onChange(of: activeSheet != nil) { _ in updateOverlayState() }
         .onChange(of: isExpanded) { expanded in
             if !expanded {
+                canTriggerAmbientActions = false
                 activeSheet = nil
                 showTracklistDrawer = false
                 isDraggingOpen = false
                 drawerDragOffset = 0
                 updateOverlayState()
+            } else {
+                canTriggerAmbientActions = true
             }
         }
-        .onChange(of: player.currentSong?.id) { _ in
-            if abs(cardSlideOffset) < 0.1 {
-                triggerTrackSwitchAnimation(direction: transitionDirection)
-            }
+        .onChange(of: player.currentSong) { newSong in
+            handleSongChange(to: newSong)
         }
     }
 
@@ -327,7 +392,7 @@ struct NowPlayingView: View {
                 .gesture(
                     DragGesture(minimumDistance: 20, coordinateSpace: .local)
                         .onEnded { value in
-                            guard isExpanded, activeSheet == nil else { return }
+                            guard isExpanded, canTriggerAmbientActions, activeSheet == nil else { return }
                             let action = PlayerEdgeSwipeResolver.resolve(
                                 startX: Double(value.startLocation.x),
                                 startY: Double(size.height - 28 + value.startLocation.y),
@@ -363,22 +428,25 @@ struct NowPlayingView: View {
             } else {
                 let coverTint = ArtworkStore.shared.tint(forKey: song.artworkKey).map { Color(uiColor: $0) } ?? Pun.amber
                 let isPlaying = player.isPlaying
-                let spread: CGFloat = isPlaying ? (compact ? 9.0 : 13.0) : 3.5
 
                 // Artwork itself has no drag gesture; edge gestures live in edgeGestureOverlays.
-                TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: !isPlaying || reduceMotion)) { timeline in
-                    let t = timeline.date.timeIntervalSinceReferenceDate
-                    let breath = (isPlaying && !reduceMotion) ? CGFloat(sin(t * 2.2)) : 0.0
-                    let shimmer = (isPlaying && !reduceMotion) ? CGFloat(cos(t * 1.7)) : 0.0
+                TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: !isAnimatingAlbumSwitch)) { timeline in
+                    let rawElapsed = isAnimatingAlbumSwitch ? timeline.date.timeIntervalSince(albumSwitchStartTime) : albumSwitchDuration
+                    let lin = min(1.0, max(0.0, rawElapsed / albumSwitchDuration))
+                    // Smooth cubic ease-out for 3D emergence
+                    let t = CGFloat(1.0 - pow(1.0 - lin, 3.0))
+                    let isTransitioning = isAnimatingAlbumSwitch && (lin < 0.995)
+                    let deckFlare = sin(CGFloat(lin) * .pi)
+                    let dir = CGFloat(activeSwitchDirection)
 
                     ZStack {
-                        // Ambient cover-reactive aura
+                        // Soft ambient cover-tinted aura (no hard edges)
                         RoundedRectangle(cornerRadius: 28, style: .continuous)
                             .fill(
                                 RadialGradient(
                                     colors: [
-                                        coverTint.opacity(isPlaying ? (colorScheme == .dark ? 0.42 : 0.26) : 0.14),
-                                        Pun.amber.opacity(isPlaying ? 0.18 : 0.05),
+                                        coverTint.opacity(isPlaying ? (colorScheme == .dark ? 0.38 : 0.24) : 0.14),
+                                        Pun.amber.opacity(isPlaying ? 0.14 : 0.05),
                                         Color.clear
                                     ],
                                     center: .center,
@@ -386,108 +454,88 @@ struct NowPlayingView: View {
                                     endRadius: artworkSide * 0.68
                                 )
                             )
-                            .frame(width: artworkSide * 1.16, height: artworkSide * 1.16)
-                            .blur(radius: 22)
+                            .frame(width: artworkSide * 1.15, height: artworkSide * 1.15)
+                            .blur(radius: 24)
 
-                        // Prism Layer 2 (Deepest refracting glass portal)
-                        RoundedRectangle(cornerRadius: 24, style: .continuous)
-                            .fill(
-                                LinearGradient(
-                                    colors: [
-                                        coverTint.opacity(colorScheme == .dark ? 0.26 : 0.18),
-                                        Pun.amber.opacity(colorScheme == .dark ? 0.18 : 0.14)
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 24, style: .continuous)
-                                    .strokeBorder(
-                                        LinearGradient(
-                                            colors: [
-                                                Pun.amber.opacity(isPlaying ? 0.55 : 0.22),
-                                                Color.white.opacity(colorScheme == .dark ? 0.22 : 0.65),
-                                                Color.clear
-                                            ],
-                                            startPoint: .topTrailing,
-                                            endPoint: .bottomLeading
-                                        ),
-                                        lineWidth: 1.1
+                        // 3D Glass Prism Deck (unfolds behind the cover ONLY during an album change)
+                        if isTransitioning {
+                            RoundedRectangle(cornerRadius: 23, style: .continuous)
+                                .fill(
+                                    LinearGradient(
+                                        colors: [coverTint.opacity(0.28), Pun.amber.opacity(0.20)],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
                                     )
-                            }
-                            .frame(width: artworkSide * 0.90, height: artworkSide * 0.90)
-                            .rotationEffect(.degrees(isPlaying ? Double(5.5 + breath * 1.4) : 1.5))
-                            .offset(
-                                x: spread * 1.15 + shimmer * 2.5 - cardSlideOffset * 0.45,
-                                y: -spread * 1.10 + breath * 2.5
-                            )
-
-                        // Prism Layer 1 (Mid-depth specular glass plate)
-                        RoundedRectangle(cornerRadius: 23, style: .continuous)
-                            .fill(
-                                LinearGradient(
-                                    colors: [
-                                        Pun.surfaceRaised.opacity(colorScheme == .dark ? 0.68 : 0.82),
-                                        coverTint.opacity(colorScheme == .dark ? 0.24 : 0.16)
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
                                 )
-                            )
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 23, style: .continuous)
-                                    .strokeBorder(
-                                        LinearGradient(
-                                            colors: [
-                                                Color.white.opacity(colorScheme == .dark ? 0.36 : 0.90),
-                                                Pun.amber.opacity(isPlaying ? 0.40 : 0.15)
-                                            ],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        ),
-                                        lineWidth: 1.1
-                                    )
-                            }
-                            .frame(width: artworkSide * 0.95, height: artworkSide * 0.95)
-                            .rotationEffect(.degrees(isPlaying ? Double(-4.2 - shimmer * 1.2) : -1.2))
-                            .offset(
-                                x: -spread * 0.95 - breath * 2.0 - cardSlideOffset * 0.25,
-                                y: -spread * 0.65 - shimmer * 2.0
-                            )
+                                .overlay {
+                                    RoundedRectangle(cornerRadius: 23, style: .continuous)
+                                        .strokeBorder(Pun.amber.opacity(0.55), lineWidth: 1.1)
+                                }
+                                .frame(width: artworkSide * 0.90, height: artworkSide * 0.90)
+                                .rotationEffect(.degrees(Double(dir * 6.5 * deckFlare)))
+                                .offset(x: dir * 16.0 * deckFlare, y: -15.0 * deckFlare)
+                                .opacity(Double(deckFlare))
 
-                        // Foreground Hero Glass Album Cover
+                            RoundedRectangle(cornerRadius: 23, style: .continuous)
+                                .fill(Pun.surfaceRaised.opacity(colorScheme == .dark ? 0.65 : 0.80))
+                                .overlay {
+                                    RoundedRectangle(cornerRadius: 23, style: .continuous)
+                                        .strokeBorder(Color.white.opacity(0.45), lineWidth: 1.0)
+                                }
+                                .frame(width: artworkSide * 0.94, height: artworkSide * 0.94)
+                                .rotationEffect(.degrees(Double(-dir * 4.8 * deckFlare)))
+                                .offset(x: -dir * 13.0 * deckFlare, y: -10.0 * deckFlare)
+                                .opacity(Double(deckFlare * 0.9))
+                        }
+
+                        // New Album Cover (emerges forward out of the 3D deck when switching albums; clean at rest)
                         ArtworkView(key: song.artworkKey, seed: song.album, size: artworkSide, corner: 22)
                             .overlay {
                                 RoundedRectangle(cornerRadius: 22, style: .continuous)
                                     .strokeBorder(
                                         LinearGradient(
                                             colors: [
-                                                Color.white.opacity(colorScheme == .dark ? 0.38 : 0.92),
-                                                Pun.amber.opacity(isPlaying ? 0.34 : 0.10)
+                                                Color.white.opacity(colorScheme == .dark ? 0.34 : 0.90),
+                                                Pun.amber.opacity(isPlaying ? 0.28 : 0.10)
                                             ],
                                             startPoint: .topLeading,
                                             endPoint: .bottomTrailing
                                         ),
-                                        lineWidth: 1.15
+                                        lineWidth: 1.1
                                     )
                             }
-                            .shadow(color: .black.opacity(colorScheme == .dark ? 0.32 : 0.08), radius: 4, y: 2)
+                            .shadow(color: .black.opacity(colorScheme == .dark ? 0.30 : 0.08), radius: 4, y: 2)
                             .shadow(
-                                color: .black.opacity(colorScheme == .dark ? 0.46 : 0.16),
-                                radius: isPlaying ? 22 : 14,
+                                color: .black.opacity(colorScheme == .dark ? 0.44 : 0.15),
+                                radius: isPlaying ? 22 : 15,
                                 y: isPlaying ? 12 : 7
                             )
-                            .scaleEffect(cardDepthScale * (isPlaying ? 1.0 : 0.97))
+                            .scaleEffect(isTransitioning ? (0.82 + 0.18 * t) : 1.0)
                             .rotation3DEffect(
-                                .degrees(cardSwingAngle),
-                                axis: (x: 0.08, y: 1.0, z: 0.04),
+                                .degrees(isTransitioning ? Double(dir * 18.0 * (1.0 - t)) : 0.0),
+                                axis: (x: 0.12, y: 1.0, z: 0.04),
                                 perspective: 0.55
                             )
-                            .offset(x: cardSlideOffset, y: isPlaying ? (breath * -1.8) : 2.0)
+                            .offset(
+                                x: isTransitioning ? (dir * 22.0 * (1.0 - t)) : 0.0,
+                                y: isTransitioning ? (-20.0 * (1.0 - t)) : 0.0
+                            )
+
+                        // Outgoing Album Cover (peels away in 3D to reveal the new album cover emerging behind it)
+                        if isTransitioning, let oldCover = outgoingCoverSong {
+                            ArtworkView(key: oldCover.artworkKey, seed: oldCover.album, size: artworkSide, corner: 22)
+                                .scaleEffect(1.0 - 0.12 * t)
+                                .rotation3DEffect(
+                                    .degrees(Double(-dir * 24.0 * t)),
+                                    axis: (x: 0.08, y: 1.0, z: -0.05),
+                                    perspective: 0.55
+                                )
+                                .offset(x: -dir * (artworkSide * 0.34) * t, y: 12.0 * t)
+                                .opacity(Double(max(0.0, 1.0 - lin * 1.35)))
+                                .allowsHitTesting(false)
+                        }
                     }
                 }
-                .animation(.spring(response: 0.46, dampingFraction: 0.78), value: isPlaying)
                 .frame(maxWidth: .infinity)
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(Text("Album artwork"))
@@ -541,7 +589,7 @@ struct NowPlayingView: View {
             ZStack {
                 Pun.ink
                 if let tint = ArtworkStore.shared.tint(forKey: player.currentSong?.artworkKey).map({ Color(uiColor: $0) }) {
-                    tint.opacity(colorScheme == .dark ? 0.28 : 0.14)
+                    tint.opacity(colorScheme == .dark ? 0.28 : 0.16)
                 }
                 if let key = player.currentSong?.artworkKey,
                    let image = ArtworkStore.shared.image(forKey: key, maxPixel: 260) {
@@ -551,10 +599,10 @@ struct NowPlayingView: View {
                         .frame(width: max(1, bgWidth), height: max(1, bgHeight))
                         .clipped()
                         .blur(radius: 72)
-                        .opacity(colorScheme == .dark ? 0.34 : 0.15)
+                        .opacity(colorScheme == .dark ? 0.34 : 0.18)
                 }
                 LinearGradient(
-                    colors: [Pun.ink.opacity(0.12), Pun.ink.opacity(colorScheme == .dark ? 0.95 : 0.86)],
+                    colors: [Pun.ink.opacity(0.10), Pun.ink.opacity(colorScheme == .dark ? 0.95 : 0.84)],
                     startPoint: .top,
                     endPoint: .bottom
                 )
@@ -567,11 +615,7 @@ struct NowPlayingView: View {
     }
 
     private var header: some View {
-        VStack(spacing: 6) {
-            Capsule()
-                .fill(Pun.textDim.opacity(0.28))
-                .frame(width: 36, height: 4)
-            HStack(spacing: 7) {
+        HStack(spacing: 7) {
             Button {
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 if let onClose { onClose() } else { dismiss() }
@@ -607,33 +651,41 @@ struct NowPlayingView: View {
                         .truncationMode(.middle)
                 }
             }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.leading, 3)
-            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.leading, 3)
         }
         .frame(maxWidth: .infinity)
     }
 
     private func titleBlock(_ song: Song) -> some View {
         HStack(alignment: .bottom, spacing: 10) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(song.title)
-                    .font(Pun.title(.title2))
-                    .tracking(-0.35)
-                    .foregroundStyle(Pun.text)
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.82)
-                    .multilineTextAlignment(.leading)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text(song.artist)
-                    .font(Pun.body(.semibold))
-                    .foregroundStyle(Pun.mango)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+            TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: !isAnimatingTitleSwitch)) { timeline in
+                let rawElapsed = isAnimatingTitleSwitch ? timeline.date.timeIntervalSince(titleSwitchStartTime) : titleSwitchDuration
+                let lin = min(1.0, max(0.0, rawElapsed / titleSwitchDuration))
+                let ease = 1.0 - pow(1.0 - lin, 3.0)
+                let slideX = isAnimatingTitleSwitch ? CGFloat(activeSwitchDirection * 18.0 * (1.0 - ease)) : 0.0
+                let alpha = isAnimatingTitleSwitch ? (0.35 + 0.65 * ease) : 1.0
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(song.title)
+                        .font(Pun.title(.title2))
+                        .tracking(-0.35)
+                        .foregroundStyle(Pun.text)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.82)
+                        .multilineTextAlignment(.leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(song.artist)
+                        .font(Pun.body(.semibold))
+                        .foregroundStyle(Pun.mango)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .offset(x: slideX)
+                .opacity(alpha)
             }
-            .offset(x: cardSlideOffset * 0.55)
             .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityElement(children: .combine)
 
@@ -658,7 +710,7 @@ struct NowPlayingView: View {
                     prevScale = 0.82
                 }
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                triggerTrackSwitchAnimation(direction: -1.0)
+                pendingDirection = -1.0
                 player.previous()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
                     withAnimation(.spring(response: 0.22, dampingFraction: 0.65)) {
@@ -693,7 +745,7 @@ struct NowPlayingView: View {
                     nextScale = 0.82
                 }
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                triggerTrackSwitchAnimation(direction: 1.0)
+                pendingDirection = 1.0
                 player.next()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
                     withAnimation(.spring(response: 0.22, dampingFraction: 0.65)) {

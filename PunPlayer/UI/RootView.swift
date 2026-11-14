@@ -153,6 +153,7 @@ struct RootView: View {
                     }
                 }
         )
+        .animation(.spring(response: 0.36, dampingFraction: 0.88), value: showNowPlaying)
         .ignoresSafeArea(edges: .bottom)
         .onChange(of: showNowPlaying) { isOpen in
             let target: CGFloat = (isOpen && player.currentSong != nil) ? 1.0 : 0.0
@@ -675,11 +676,6 @@ struct MiniPlayer: View {
     var body: some View {
         if let song = player.currentSong {
             VStack(spacing: 0) {
-                Capsule()
-                    .fill(Pun.textDim.opacity(0.32))
-                    .frame(width: 28, height: 3)
-                    .padding(.top, 5)
-                    .padding(.bottom, 1)
                 HStack(spacing: 10) {
                     Button {
                         UIImpactFeedbackGenerator(style: .light).impactOccurred()
@@ -738,8 +734,8 @@ struct MiniPlayer: View {
                     .accessibilityLabel("Next track")
                 }
                 .padding(.horizontal, 12)
-                .padding(.top, 3)
-                .padding(.bottom, 5)
+                .padding(.top, 8)
+                .padding(.bottom, 6)
 
                 // The decoded waveform and progress share one lane inside the opaque card.
                 MiniProgress(clock: player.clock, song: song)

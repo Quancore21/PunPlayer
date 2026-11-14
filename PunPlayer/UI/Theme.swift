@@ -1,8 +1,8 @@
 //
 //  PunPlayer — UI/Theme.swift
 //
-//  Visual identity (0.2): Deep obsidian dark & warm porcelain light palettes,
-//  contrasting obsidian-gold icon medallions, fanned artwork stacks, and live equalizer bars.
+//  Visual identity (0.2): Deep obsidian dark & sunlit porcelain light palettes,
+//  translucent amber glass icon capsules, fanned artwork stacks, and live equalizer bars.
 //  PunPlayer is licensed under GPLv3.
 //
 
@@ -22,15 +22,14 @@ extension Color {
 }
 
 enum Pun {
-    static let ink = adaptive(dark: 0x07090A, light: 0xFAF7F2)
-    static let surface = adaptive(dark: 0x121618, light: 0xFFFFFF)
-    static let surfaceRaised = adaptive(dark: 0x1B2124, light: 0xF2ECE1)
+    static let ink = adaptive(dark: 0x07090A, light: 0xFAF6EE)
+    static let surface = adaptive(dark: 0x13181A, light: 0xFFFFFF)
+    static let surfaceRaised = adaptive(dark: 0x1C2326, light: 0xF3ECE0)
     static let amber = Color(hex: 0xFEAE25)
-    static let mango = adaptive(dark: 0xFEAE25, light: 0xC46A00)
-    static let text = adaptive(dark: 0xF6F5EF, light: 0x121516)
-    static let textDim = adaptive(dark: 0x969F9C, light: 0x5A6260)
-    static let separator = adaptive(dark: 0x2A3234, light: 0xE2DACB)
-    static let badgeWell = adaptive(dark: 0x191F22, light: 0x16191C)
+    static let mango = adaptive(dark: 0xFEAE25, light: 0xC86400)
+    static let text = adaptive(dark: 0xF6F5EF, light: 0x141718)
+    static let textDim = adaptive(dark: 0x96A09D, light: 0x5C6460)
+    static let separator = adaptive(dark: 0x2B3336, light: 0xE4D9C5)
 
     private static func adaptive(dark: UInt32, light: UInt32) -> Color {
         Color(uiColor: UIColor { traits in
@@ -167,21 +166,23 @@ struct AppBackground: View {
             Pun.ink
             RadialGradient(
                 colors: [
-                    tint.opacity(isDark ? 0.28 : 0.16),
-                    Pun.amber.opacity(isDark ? 0.08 : 0.07),
+                    tint.opacity(isDark ? 0.28 : 0.20),
+                    Pun.amber.opacity(isDark ? 0.08 : 0.12),
                     Pun.ink.opacity(0.0)
                 ],
                 center: .topLeading,
-                startRadius: 20,
-                endRadius: 520
+                startRadius: 16,
+                endRadius: 540
             )
-            LinearGradient(
+            RadialGradient(
                 colors: [
-                    Pun.ink.opacity(0.0),
-                    tint.opacity(isDark ? 0.12 : 0.06)
+                    Pun.amber.opacity(isDark ? 0.07 : 0.11),
+                    tint.opacity(isDark ? 0.12 : 0.08),
+                    Pun.ink.opacity(0.0)
                 ],
-                startPoint: .top,
-                endPoint: .bottomTrailing
+                center: .bottomTrailing,
+                startRadius: 20,
+                endRadius: 460
             )
         }
         .animation(.easeInOut(duration: 0.55), value: player.currentSong?.id)
@@ -196,14 +197,21 @@ private struct LiquidGlassCardModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         let isDark = (colorScheme == .dark)
+        let shadowColor = isDark
+            ? Color.black.opacity(prominent ? 0.30 : 0.24)
+            : Color(hex: 0x6E491A).opacity(prominent ? 0.11 : 0.075)
+
         content
             .background {
                 RoundedRectangle(cornerRadius: corner, style: .continuous)
                     .fill(
                         LinearGradient(
                             colors: isDark
-                                ? [prominent ? Pun.surfaceRaised : Pun.surface, Pun.surface.opacity(0.92)]
-                                : [Color.white, prominent ? Color(hex: 0xFFFDF9) : Color(hex: 0xFDFBF7)],
+                                ? [prominent ? Pun.surfaceRaised : Pun.surface, Pun.surface.opacity(0.93)]
+                                : [
+                                    Color.white,
+                                    prominent ? Color(hex: 0xFFF9EE) : Color(hex: 0xFFFCF6)
+                                ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
@@ -215,21 +223,21 @@ private struct LiquidGlassCardModifier: ViewModifier {
                         LinearGradient(
                             colors: isDark
                                 ? [
-                                    prominent ? Pun.amber.opacity(0.48) : Color.white.opacity(0.18),
+                                    prominent ? Pun.amber.opacity(0.46) : Color.white.opacity(0.16),
                                     Pun.separator.opacity(0.45)
                                 ]
                                 : [
-                                    prominent ? Pun.amber.opacity(0.55) : Color.white,
-                                    prominent ? Pun.amber.opacity(0.22) : Color(hex: 0xE5DEC9)
+                                    prominent ? Pun.amber.opacity(0.65) : Color.white,
+                                    prominent ? Pun.amber.opacity(0.28) : Color(hex: 0xE6DAC3)
                                 ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         ),
-                        lineWidth: prominent ? 1.05 : 0.85
+                        lineWidth: prominent ? 1.1 : 0.85
                     )
             }
-            .shadow(color: Color.black.opacity(isDark ? 0.25 : 0.035), radius: 2, y: 1)
-            .shadow(color: Color.black.opacity(isDark ? 0.28 : 0.065), radius: prominent ? 15 : 10, y: prominent ? 6 : 4)
+            .shadow(color: shadowColor.opacity(0.5), radius: 2, y: 1)
+            .shadow(color: shadowColor, radius: prominent ? 16 : 10, y: prominent ? 7 : 4)
     }
 }
 
@@ -263,9 +271,9 @@ extension View {
     }
 }
 
-// MARK: - Signature Medallions & Fanned Covers
+// MARK: - Luminous Amber Glass Icon Capsules & Fanned Covers
 
-/// High-contrast obsidian-and-amber icon medallion inspired by the PunPlayer mark.
+/// Luminous translucent amber glass capsule (replaces heavy black boxes).
 struct PunIconBadge: View {
     let symbol: String
     var size: CGFloat = 44
@@ -280,36 +288,33 @@ struct PunIconBadge: View {
                 .fill(
                     LinearGradient(
                         colors: isDark
-                            ? [Color(hex: 0x232A2E), Color(hex: 0x14181A)]
-                            : [Color(hex: 0x1E2226), Color(hex: 0x101214)],
+                            ? [Pun.amber.opacity(0.20), Pun.amber.opacity(0.08)]
+                            : [Color(hex: 0xFFF2D6), Color(hex: 0xFFE1A8)],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
-                    )
-                )
-            RoundedRectangle(cornerRadius: corner, style: .continuous)
-                .fill(
-                    RadialGradient(
-                        colors: [Pun.amber.opacity(0.20), Color.clear],
-                        center: .bottomTrailing,
-                        startRadius: 1,
-                        endRadius: size * 0.8
                     )
                 )
             RoundedRectangle(cornerRadius: corner, style: .continuous)
                 .strokeBorder(
                     LinearGradient(
-                        colors: [Pun.amber.opacity(0.42), Color.white.opacity(0.10)],
+                        colors: isDark
+                            ? [Pun.amber.opacity(0.42), Color.white.opacity(0.08)]
+                            : [Color.white.opacity(0.95), Pun.amber.opacity(0.48)],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     ),
-                    lineWidth: 0.75
+                    lineWidth: 0.85
                 )
             Image(systemName: symbol)
                 .font(.system(size: fontSize, weight: .semibold))
-                .foregroundStyle(Pun.amber)
+                .foregroundStyle(isDark ? Pun.amber : Color(hex: 0xB85800))
         }
         .frame(width: size, height: size)
-        .shadow(color: Color.black.opacity(isDark ? 0.25 : 0.14), radius: 5, y: 2)
+        .shadow(
+            color: isDark ? Color.black.opacity(0.18) : Pun.amber.opacity(0.16),
+            radius: 5,
+            y: 2
+        )
     }
 }
 
@@ -339,12 +344,12 @@ struct ArtworkFanView: View {
                     let depth = CGFloat(index)
                     ArtworkView(key: song.artworkKey, seed: song.album, size: size, corner: size * 0.26)
                         .scaleEffect(1.0 - depth * 0.08)
-                        .rotationEffect(.degrees(Double(index) * 7.5 - Double(items.count - 1) * 3.5))
-                        .offset(x: -depth * (size * 0.34), y: depth * 1.5)
-                        .shadow(color: Color.black.opacity(0.22), radius: 4, x: 0, y: 2)
+                        .rotationEffect(.degrees(Double(index) * 7.0 - Double(items.count - 1) * 3.2))
+                        .offset(x: -depth * (size * 0.32), y: depth * 1.2)
+                        .shadow(color: Color.black.opacity(0.18), radius: 3, x: 0, y: 2)
                 }
             }
-            .frame(width: size + CGFloat(max(0, items.count - 1)) * (size * 0.34), height: size + 4)
+            .frame(width: size + CGFloat(max(0, items.count - 1)) * (size * 0.32), height: size + 4)
             .accessibilityHidden(true)
         }
     }
@@ -433,25 +438,10 @@ struct PlayingBarsView: View {
     }
 }
 
-private struct ActiveTrackTimeBadge: View {
-    @ObservedObject var clock: PlaybackClock
-    let fallbackDuration: TimeInterval
-
-    var body: some View {
-        let total = clock.duration > 0 ? clock.duration : fallbackDuration
-        let pos = min(max(0, clock.position), total)
-        Text(verbatim: "\(Format.time(pos)) / \(Format.time(total))")
-            .font(.system(size: 11, weight: .semibold, design: .monospaced))
-            .monospacedDigit()
-            .foregroundStyle(Pun.mango)
-    }
-}
-
 struct SongRow: View {
     let song: Song
     var isCurrent = false
     var showsArtwork = true
-    var showsLiveTime = false
     @EnvironmentObject private var player: PlayerEngine
 
     var body: some View {
@@ -471,12 +461,7 @@ struct SongRow: View {
             }
             Spacer(minLength: 8)
             if isCurrent {
-                HStack(spacing: 7) {
-                    if showsLiveTime {
-                        ActiveTrackTimeBadge(clock: player.clock, fallbackDuration: song.duration)
-                    }
-                    PlayingBarsView(isPlaying: player.isPlaying)
-                }
+                PlayingBarsView(isPlaying: player.isPlaying)
             } else {
                 Text(Format.time(song.duration))
                     .font(Pun.caption())

@@ -30,8 +30,8 @@ Drop your albums into the Files app, import via AirDrop, or pick documents from 
 
 ## Features & Highlights (0.2 Beta)
 
-### Multi-Layered 3D Glass Prism & Porcelain/Obsidian Themes
-In **0.2 Beta**, album artwork floats inside a multi-layered refracting glass prism that unfolds in 3D perspective while playing and glides with directional 3D inertia on track switch. Both **Dark (Velvet Obsidian)** and **Light (Warm Porcelain & Obsidian-Gold Medallions)** themes feature specular Liquid Glass rims, fanned album cover stacks on Home, and live 3-bar equalizer indicators.
+### 3D Album-Deck Transitions & Sunlit Porcelain / Obsidian Themes
+In **0.2 Beta**, switching between different albums reveals a 3D glass deck emergence behind the cover while keeping single-album playback clean and uncluttered. Both **Dark (Velvet Obsidian)** and **Light (Sunlit Porcelain & Luminous Amber Glass)** themes feature fanned album cover stacks on Home, translucent icon capsules, and live 3-bar equalizer indicators.
 
 ### Liquid Glass & Classic App Icons
 Crafted from the Apple Icon Composer specification with translucent amber glass, an inner-specular dark planet, and a warm cream gradient. Switch freely between **Liquid Glass** (default) and **Classic** anytime in **Settings -> Personalization -> App icon**.

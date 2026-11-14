@@ -121,7 +121,11 @@ struct AlbumTracklistSheet: View {
                         ForEach(Array(tracks.enumerated()), id: \.element.id) { index, song in
                             Button {
                                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                                player.play(songs: tracks, start: song, title: currentSong.album)
+                                if player.currentSong?.id == song.id {
+                                    if !player.isActive { player.resume() }
+                                } else {
+                                    player.play(songs: tracks, start: song, title: currentSong.album)
+                                }
                                 closeSheet()
                             } label: {
                                 let isCurrent = (player.currentSong?.id == song.id)

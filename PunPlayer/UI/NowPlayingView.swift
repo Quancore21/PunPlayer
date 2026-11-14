@@ -124,12 +124,16 @@ struct NowPlayingView: View {
     private func openTracklistDrawer(width: CGFloat? = nil) {
         guard isExpanded else { return }
         drawerAnimationToken += 1
+        let currentToken = drawerAnimationToken
         let actualWidth = width ?? metrics.drawerWidth
-        drawerDragOffset = actualWidth
         isDraggingOpen = false
+        drawerDragOffset = actualWidth
         showTracklistDrawer = true
-        withAnimation(.spring(response: 0.32, dampingFraction: 0.84)) {
-            drawerDragOffset = 0
+        DispatchQueue.main.async {
+            guard self.drawerAnimationToken == currentToken else { return }
+            withAnimation(.spring(response: 0.32, dampingFraction: 0.84)) {
+                self.drawerDragOffset = 0
+            }
         }
     }
 
@@ -156,7 +160,7 @@ struct NowPlayingView: View {
             let currentOffset: CGFloat = isDraggingOpen
                 ? max(0, drawerWidth + drawerDragOffset)
                 : max(0, drawerDragOffset)
-            let progress = max(0, min(1.0, 1.0 - Double(currentOffset / drawerWidth)))
+            let progress = isDrawerVisible ? max(0, min(1.0, 1.0 - Double(currentOffset / drawerWidth))) : 0.0
 
             ZStack {
                 Group {
@@ -166,10 +170,8 @@ struct NowPlayingView: View {
                         emptyContent
                     }
                 }
-                // Fade & blur main player when Album Tracklist Drawer slides over so text never bleeds on the left
                 .scaleEffect(1.0 - CGFloat(progress) * 0.04)
-                .blur(radius: CGFloat(progress) * 10.0)
-                .opacity(1.0 - progress * 0.92)
+                .opacity(1.0 - progress)
 
                 // Edge gesture overlays — transparent hit targets at screen edges.
                 // Placed outside interactive control zones so buttons always receive taps.
@@ -235,19 +237,22 @@ struct NowPlayingView: View {
             .background { artworkBackground }
             .toolbar(.hidden, for: .navigationBar)
             .navigationBarBackButtonHidden()
-            // Ambient swipe-up gesture for the whole player: strictly guarded by isExpanded and canTriggerAmbientActions
+            // Ambient swipe-up gesture in GLOBAL screen coordinates so sheetOffsetY never inverts translation
             .simultaneousGesture(
-                DragGesture(minimumDistance: 36)
-                    .onChanged { _ in
+                DragGesture(minimumDistance: 36, coordinateSpace: .global)
+                    .onChanged { value in
                         if !isExpanded || showTracklistDrawer || showLyrics || activeSheet != nil {
+                            canTriggerAmbientActions = false
+                        }
+                        if value.translation.height > 10 || abs(value.translation.width) > 26 {
                             canTriggerAmbientActions = false
                         }
                     }
                     .onEnded { value in
                         defer { canTriggerAmbientActions = true }
                         guard isExpanded, canTriggerAmbientActions, activeSheet == nil, !showTracklistDrawer, !showLyrics else { return }
-                        guard value.startLocation.y > metrics.playerTopPadding + 70 else { return }
-                        if value.translation.height < -56 && abs(value.translation.height) > abs(value.translation.width) * 1.4 {
+                        guard value.startLocation.y > metrics.playerTopPadding + 80 else { return }
+                        if value.translation.height < -64 && abs(value.translation.height) > abs(value.translation.width) * 1.5 {
                             activeSheet = .actions
                         }
                     }
@@ -343,9 +348,11 @@ struct NowPlayingView: View {
                     DragGesture(minimumDistance: 10, coordinateSpace: .local)
                         .onChanged { value in
                             guard isExpanded, activeSheet == nil, !showTracklistDrawer else { return }
-                            if value.translation.width < 0 && abs(value.translation.width) > abs(value.translation.height) * 0.8 {
+                            if isDraggingOpen {
+                                drawerDragOffset = min(0, max(-drawerWidth, value.translation.width))
+                            } else if value.translation.width < 0 && abs(value.translation.width) > abs(value.translation.height) * 0.8 {
                                 isDraggingOpen = true
-                                drawerDragOffset = value.translation.width
+                                drawerDragOffset = min(0, max(-drawerWidth, value.translation.width))
                             }
                         }
                         .onEnded { value in
@@ -361,6 +368,7 @@ struct NowPlayingView: View {
                             drawerAnimationToken += 1
                             let currentToken = drawerAnimationToken
                             if action == .albumTracklist || value.translation.width < -40 || value.predictedEndTranslation.width < -80 {
+                                isDraggingOpen = true
                                 withAnimation(.spring(response: 0.30, dampingFraction: 0.84)) {
                                     drawerDragOffset = -drawerWidth
                                 }

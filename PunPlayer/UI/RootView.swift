@@ -21,6 +21,7 @@ struct RootView: View {
     @State private var expansion: CGFloat = 0.0
     @State private var dragStartExpansion: CGFloat = 0.0
     @State private var isDraggingPlayer = false
+    @State private var ignoreCurrentPlayerDrag = false
     @State private var didTriggerDragHaptic = false
 
     private var metrics: ScreenMetrics { ScreenMetrics.shared }
@@ -28,6 +29,7 @@ struct RootView: View {
     private func animatePlayer(open: Bool) {
         showNowPlaying = open
         isDraggingPlayer = false
+        ignoreCurrentPlayerDrag = false
         didTriggerDragHaptic = false
         if !open {
             isPlayerOverlayActive = false
@@ -56,21 +58,21 @@ struct RootView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .allowsHitTesting(p < 0.05)
 
-            if !showNowPlaying {
-                VStack(spacing: 0) {
+            VStack(spacing: 0) {
+                if !showNowPlaying {
                     if !pausedStores.isEmpty {
                         storageBanner
                     }
-                    if hasSong {
-                        MiniPlayer { showNowPlaying = true }
-                            .padding(.horizontal, 12)
-                            .padding(.top, 6)
-                            .padding(.bottom, bottomInset)
-                            .offset(y: -p * 52.0)
-                            .scaleEffect(1.0 + p * 0.02, anchor: .bottom)
-                            .opacity(miniOpacity)
-                            .allowsHitTesting(p < 0.05)
-                    }
+                }
+                if hasSong && p < 0.98 {
+                    MiniPlayer { showNowPlaying = true }
+                        .padding(.horizontal, 12)
+                        .padding(.top, 6)
+                        .padding(.bottom, bottomInset)
+                        .offset(y: -p * 52.0)
+                        .scaleEffect(1.0 + p * 0.02, anchor: .bottom)
+                        .opacity(miniOpacity)
+                        .allowsHitTesting(!showNowPlaying && p < 0.05)
                 }
             }
 
@@ -114,17 +116,22 @@ struct RootView: View {
         .simultaneousGesture(
             DragGesture(minimumDistance: 10, coordinateSpace: .global)
                 .onChanged { value in
-                    guard hasSong else { return }
+                    guard hasSong, !ignoreCurrentPlayerDrag else { return }
                     let dy = value.translation.height
                     let dx = value.translation.width
                     if !isDraggingPlayer {
                         if !showNowPlaying {
-                            // Start upward pull only from bottom MiniPlayer zone
-                            guard value.startLocation.y >= screenH - (bottomInset + 82) && dy < -6 && abs(dy) > abs(dx) * 0.75 else { return }
+                            if value.startLocation.y < screenH - (bottomInset + 86) || abs(dx) > 18 || dy > 6 {
+                                ignoreCurrentPlayerDrag = true
+                                return
+                            }
+                            guard dy < -6 && abs(dy) > abs(dx) * 0.85 else { return }
                         } else {
-                            // Start downward dismiss from header or artwork area (never when lyrics/drawer/sheet is open)
-                            guard !isPlayerOverlayActive else { return }
-                            guard value.startLocation.y < screenH * 0.54 && dy > 8 && abs(dy) > abs(dx) * 0.85 else { return }
+                            if isPlayerOverlayActive || value.startLocation.y > screenH * 0.78 || abs(dx) > 18 || dy < -6 {
+                                ignoreCurrentPlayerDrag = true
+                                return
+                            }
+                            guard dy > 8 && abs(dy) > abs(dx) * 1.15 else { return }
                         }
                         isDraggingPlayer = true
                         dragStartExpansion = expansion
@@ -141,6 +148,7 @@ struct RootView: View {
                     }
                 }
                 .onEnded { value in
+                    defer { ignoreCurrentPlayerDrag = false }
                     guard isDraggingPlayer else { return }
                     let dy = value.translation.height
                     let predictedY = value.predictedEndTranslation.height

@@ -153,9 +153,7 @@ struct SettingsView: View {
                     AboutView()
                 } label: {
                     HStack(spacing: 12) {
-                        Image(systemName: "info.circle.fill")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundStyle(Pun.mango)
+                        PunIconBadge(symbol: "info.circle.fill", size: 32, corner: 9, fontSize: 15)
                         Text("About")
                             .font(Pun.body(.medium))
                             .foregroundStyle(Pun.text)

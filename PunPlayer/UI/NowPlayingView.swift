@@ -1,10 +1,12 @@
 //
 //  PunPlayer — UI/NowPlayingView.swift
-//  Full-screen, artwork-first player; playback actions stay reachable without a gesture.
+//  Full-screen, artwork-first player with Multi-Layered Glass Prism depth,
+//  directional 3D track-switch choreography, and guarded edge gestures.
 //  PunPlayer is licensed under GPLv3.
 //
 
 import SwiftUI
+import UIKit
 
 private enum PlayerSheet: String, Identifiable {
     case actions
@@ -16,11 +18,18 @@ private enum PlayerSheet: String, Identifiable {
 struct NowPlayingView: View {
     var onClose: (() -> Void)? = nil
     @Binding var isOverlayActive: Bool
+    var isExpanded: Bool = true
 
-    init(onClose: (() -> Void)? = nil, isOverlayActive: Binding<Bool> = .constant(false)) {
+    init(
+        onClose: (() -> Void)? = nil,
+        isOverlayActive: Binding<Bool> = .constant(false),
+        isExpanded: Bool = true
+    ) {
         self.onClose = onClose
         self._isOverlayActive = isOverlayActive
+        self.isExpanded = isExpanded
     }
+
     @EnvironmentObject private var player: PlayerEngine
     @EnvironmentObject private var library: LibraryStore
     @EnvironmentObject private var playlists: PlaylistStore
@@ -42,11 +51,35 @@ struct NowPlayingView: View {
     @State private var nextNudge: CGFloat = 0
     @State private var nextScale: CGFloat = 1.0
 
+    // Directional 3D track-switch choreography state
+    @State private var transitionDirection: Double = 1.0
+    @State private var cardSwingAngle: Double = 0.0
+    @State private var cardSlideOffset: CGFloat = 0.0
+    @State private var cardDepthScale: CGFloat = 1.0
+
     private func updateOverlayState() {
         isOverlayActive = showLyrics || showTracklistDrawer || isDraggingOpen || (activeSheet != nil)
     }
 
+    private func triggerTrackSwitchAnimation(direction: Double) {
+        guard !reduceMotion else { return }
+        transitionDirection = direction
+        withAnimation(.spring(response: 0.11, dampingFraction: 0.62)) {
+            cardSwingAngle = direction * 12.0
+            cardSlideOffset = CGFloat(direction * 22.0)
+            cardDepthScale = 0.93
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.11) {
+            withAnimation(.spring(response: 0.42, dampingFraction: 0.76)) {
+                cardSwingAngle = 0.0
+                cardSlideOffset = 0.0
+                cardDepthScale = 1.0
+            }
+        }
+    }
+
     private func openTracklistDrawer(width: CGFloat? = nil) {
+        guard isExpanded else { return }
         drawerAnimationToken += 1
         let actualWidth = width ?? metrics.drawerWidth
         drawerDragOffset = actualWidth
@@ -146,13 +179,14 @@ struct NowPlayingView: View {
             .background { artworkBackground }
             .toolbar(.hidden, for: .navigationBar)
             .navigationBarBackButtonHidden()
-            // Ambient swipe-up gesture for the whole player: allows effortless pull-up of
-            // Track Actions from anywhere without fighting the iOS Home Indicator.
+            // Ambient swipe-up gesture for the whole player: strictly guarded by isExpanded
+            // so closing the player or interacting with Home never triggers TrackActionsSheet.
             .simultaneousGesture(
-                DragGesture(minimumDistance: 32)
+                DragGesture(minimumDistance: 36)
                     .onEnded { value in
-                        guard activeSheet == nil, !showTracklistDrawer, !showLyrics else { return }
-                        if value.translation.height < -44 && abs(value.translation.height) > abs(value.translation.width) * 1.15 {
+                        guard isExpanded, activeSheet == nil, !showTracklistDrawer, !showLyrics else { return }
+                        guard value.startLocation.y > metrics.playerTopPadding + 70 else { return }
+                        if value.translation.height < -52 && abs(value.translation.height) > abs(value.translation.width) * 1.35 {
                             activeSheet = .actions
                         }
                     }
@@ -213,7 +247,20 @@ struct NowPlayingView: View {
         .onChange(of: showTracklistDrawer) { _ in updateOverlayState() }
         .onChange(of: isDraggingOpen) { _ in updateOverlayState() }
         .onChange(of: activeSheet != nil) { _ in updateOverlayState() }
-        
+        .onChange(of: isExpanded) { expanded in
+            if !expanded {
+                activeSheet = nil
+                showTracklistDrawer = false
+                isDraggingOpen = false
+                drawerDragOffset = 0
+                updateOverlayState()
+            }
+        }
+        .onChange(of: player.currentSong?.id) { _ in
+            if abs(cardSlideOffset) < 0.1 {
+                triggerTrackSwitchAnimation(direction: transitionDirection)
+            }
+        }
     }
 
     /// Transparent overlays at the right and bottom edges that capture edge swipe gestures.
@@ -222,7 +269,7 @@ struct NowPlayingView: View {
     private func edgeGestureOverlays(size: CGSize) -> some View {
         let drawerWidth = min(size.width * 0.92, 420)
         return ZStack {
-            // Right edge → swipe left opens album tracklist with interactive dragging
+            // Right edge -> swipe left opens album tracklist with interactive dragging
             Color.clear
                 .frame(width: 44)
                 .frame(maxHeight: .infinity)
@@ -230,14 +277,14 @@ struct NowPlayingView: View {
                 .gesture(
                     DragGesture(minimumDistance: 10, coordinateSpace: .local)
                         .onChanged { value in
-                            guard activeSheet == nil, !showTracklistDrawer else { return }
+                            guard isExpanded, activeSheet == nil, !showTracklistDrawer else { return }
                             if value.translation.width < 0 && abs(value.translation.width) > abs(value.translation.height) * 0.8 {
                                 isDraggingOpen = true
                                 drawerDragOffset = value.translation.width
                             }
                         }
                         .onEnded { value in
-                            guard activeSheet == nil, !showTracklistDrawer else { return }
+                            guard isExpanded, activeSheet == nil, !showTracklistDrawer else { return }
                             let action = PlayerEdgeSwipeResolver.resolve(
                                 startX: Double(size.width - 44 + value.startLocation.x),
                                 startY: Double(value.startLocation.y),
@@ -272,8 +319,7 @@ struct NowPlayingView: View {
                 )
                 .frame(maxWidth: .infinity, alignment: .trailing)
 
-            // Bottom edge strip → swipe up from the bottom edge margin opens track actions.
-            // Sized at 28pt so it lives strictly below the transport buttons and never blocks taps.
+            // Bottom edge strip -> swipe up from the bottom edge margin opens track actions.
             Color.clear
                 .frame(height: 28)
                 .frame(maxWidth: .infinity)
@@ -281,7 +327,7 @@ struct NowPlayingView: View {
                 .gesture(
                     DragGesture(minimumDistance: 20, coordinateSpace: .local)
                         .onEnded { value in
-                            guard activeSheet == nil else { return }
+                            guard isExpanded, activeSheet == nil else { return }
                             let action = PlayerEdgeSwipeResolver.resolve(
                                 startX: Double(value.startLocation.x),
                                 startY: Double(size.height - 28 + value.startLocation.y),
@@ -295,7 +341,7 @@ struct NowPlayingView: View {
                 )
                 .frame(maxHeight: .infinity, alignment: .bottom)
         }
-        .allowsHitTesting(true)
+        .allowsHitTesting(isExpanded)
     }
 
     private func playerContent(song: Song, screen: CGSize) -> some View {
@@ -315,101 +361,133 @@ struct NowPlayingView: View {
                     .frame(maxHeight: .infinity)
                     .padding(.horizontal, 2)
             } else {
-                let coverTint = ArtworkStore.shared.tint(forKey: song.artworkKey).map { Color(uiColor: $0) } ?? Pun.mango
-                let isOrbiting = player.isPlaying
-                let discOffset: CGFloat = isOrbiting ? (artworkSide * (compact ? 0.105 : 0.145)) : 0
-                let coverShift: CGFloat = isOrbiting ? (-artworkSide * 0.04) : 0
-                let discSize: CGFloat = artworkSide * 0.84
+                let coverTint = ArtworkStore.shared.tint(forKey: song.artworkKey).map { Color(uiColor: $0) } ?? Pun.amber
+                let isPlaying = player.isPlaying
+                let spread: CGFloat = isPlaying ? (compact ? 9.0 : 13.0) : 3.5
 
                 // Artwork itself has no drag gesture; edge gestures live in edgeGestureOverlays.
-                ZStack {
-                    // Ambient cover-tinted aura
-                    RoundedRectangle(cornerRadius: 24, style: .continuous)
-                        .fill(coverTint.opacity(isOrbiting ? (colorScheme == .dark ? 0.34 : 0.20) : 0.10))
-                        .frame(width: artworkSide * 0.92, height: artworkSide * 0.92)
-                        .blur(radius: 30)
+                TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: !isPlaying || reduceMotion)) { timeline in
+                    let t = timeline.date.timeIntervalSinceReferenceDate
+                    let breath = (isPlaying && !reduceMotion) ? CGFloat(sin(t * 2.2)) : 0.0
+                    let shimmer = (isPlaying && !reduceMotion) ? CGFloat(cos(t * 1.7)) : 0.0
 
-                    // Concept A: Kinetic Obsidian Orbital Disc (emerges at 45 deg on Play, eclipses behind cover on Pause)
-                    TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: !isOrbiting || reduceMotion)) { timeline in
-                        let angle = reduceMotion ? 0.0 : (timeline.date.timeIntervalSinceReferenceDate * 28.0).truncatingRemainder(dividingBy: 360.0)
-                        ZStack {
-                            Circle()
-                                .fill(
-                                    RadialGradient(
-                                        colors: [Color(hex: 0x22272A), Color(hex: 0x090B0C)],
-                                        center: .topLeading,
-                                        startRadius: 8,
-                                        endRadius: discSize
-                                    )
+                    ZStack {
+                        // Ambient cover-reactive aura
+                        RoundedRectangle(cornerRadius: 28, style: .continuous)
+                            .fill(
+                                RadialGradient(
+                                    colors: [
+                                        coverTint.opacity(isPlaying ? (colorScheme == .dark ? 0.42 : 0.26) : 0.14),
+                                        Pun.amber.opacity(isPlaying ? 0.18 : 0.05),
+                                        Color.clear
+                                    ],
+                                    center: .center,
+                                    startRadius: 12,
+                                    endRadius: artworkSide * 0.68
                                 )
-                            Circle()
-                                .stroke(Color.white.opacity(0.07), lineWidth: 0.6)
-                                .frame(width: discSize * 0.78, height: discSize * 0.78)
-                            Circle()
-                                .stroke(Color.white.opacity(0.05), lineWidth: 0.6)
-                                .frame(width: discSize * 0.58, height: discSize * 0.58)
-                            // Rotating specular light sheen
-                            Circle()
-                                .fill(
-                                    AngularGradient(
-                                        colors: [
-                                            Color.white.opacity(0.0),
-                                            Color.white.opacity(0.16),
-                                            Color.white.opacity(0.0),
-                                            Pun.amber.opacity(0.14),
-                                            Color.white.opacity(0.0)
-                                        ],
-                                        center: .center
-                                    )
+                            )
+                            .frame(width: artworkSide * 1.16, height: artworkSide * 1.16)
+                            .blur(radius: 22)
+
+                        // Prism Layer 2 (Deepest refracting glass portal)
+                        RoundedRectangle(cornerRadius: 24, style: .continuous)
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        coverTint.opacity(colorScheme == .dark ? 0.26 : 0.18),
+                                        Pun.amber.opacity(colorScheme == .dark ? 0.18 : 0.14)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
                                 )
-                                .rotationEffect(.degrees(angle))
-                            // Planetary amber core
-                            Circle()
-                                .fill(Pun.amber)
-                                .frame(width: discSize * 0.24, height: discSize * 0.24)
-                            Circle()
-                                .fill(Color(hex: 0x090B0C))
-                                .frame(width: discSize * 0.08, height: discSize * 0.08)
-                        }
-                        .frame(width: discSize, height: discSize)
-                        .overlay(Circle().stroke(Color.white.opacity(0.14), lineWidth: 0.75))
-                        .shadow(color: .black.opacity(0.35), radius: 14, x: 4, y: 6)
+                            )
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                                    .strokeBorder(
+                                        LinearGradient(
+                                            colors: [
+                                                Pun.amber.opacity(isPlaying ? 0.55 : 0.22),
+                                                Color.white.opacity(colorScheme == .dark ? 0.22 : 0.65),
+                                                Color.clear
+                                            ],
+                                            startPoint: .topTrailing,
+                                            endPoint: .bottomLeading
+                                        ),
+                                        lineWidth: 1.1
+                                    )
+                            }
+                            .frame(width: artworkSide * 0.90, height: artworkSide * 0.90)
+                            .rotationEffect(.degrees(isPlaying ? Double(5.5 + breath * 1.4) : 1.5))
+                            .offset(
+                                x: spread * 1.15 + shimmer * 2.5 - cardSlideOffset * 0.45,
+                                y: -spread * 1.10 + breath * 2.5
+                            )
+
+                        // Prism Layer 1 (Mid-depth specular glass plate)
+                        RoundedRectangle(cornerRadius: 23, style: .continuous)
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        Pun.surfaceRaised.opacity(colorScheme == .dark ? 0.68 : 0.82),
+                                        coverTint.opacity(colorScheme == .dark ? 0.24 : 0.16)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 23, style: .continuous)
+                                    .strokeBorder(
+                                        LinearGradient(
+                                            colors: [
+                                                Color.white.opacity(colorScheme == .dark ? 0.36 : 0.90),
+                                                Pun.amber.opacity(isPlaying ? 0.40 : 0.15)
+                                            ],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        ),
+                                        lineWidth: 1.1
+                                    )
+                            }
+                            .frame(width: artworkSide * 0.95, height: artworkSide * 0.95)
+                            .rotationEffect(.degrees(isPlaying ? Double(-4.2 - shimmer * 1.2) : -1.2))
+                            .offset(
+                                x: -spread * 0.95 - breath * 2.0 - cardSlideOffset * 0.25,
+                                y: -spread * 0.65 - shimmer * 2.0
+                            )
+
+                        // Foreground Hero Glass Album Cover
+                        ArtworkView(key: song.artworkKey, seed: song.album, size: artworkSide, corner: 22)
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                                    .strokeBorder(
+                                        LinearGradient(
+                                            colors: [
+                                                Color.white.opacity(colorScheme == .dark ? 0.38 : 0.92),
+                                                Pun.amber.opacity(isPlaying ? 0.34 : 0.10)
+                                            ],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        ),
+                                        lineWidth: 1.15
+                                    )
+                            }
+                            .shadow(color: .black.opacity(colorScheme == .dark ? 0.32 : 0.08), radius: 4, y: 2)
+                            .shadow(
+                                color: .black.opacity(colorScheme == .dark ? 0.46 : 0.16),
+                                radius: isPlaying ? 22 : 14,
+                                y: isPlaying ? 12 : 7
+                            )
+                            .scaleEffect(cardDepthScale * (isPlaying ? 1.0 : 0.97))
+                            .rotation3DEffect(
+                                .degrees(cardSwingAngle),
+                                axis: (x: 0.08, y: 1.0, z: 0.04),
+                                perspective: 0.55
+                            )
+                            .offset(x: cardSlideOffset, y: isPlaying ? (breath * -1.8) : 2.0)
                     }
-                    .scaleEffect(isOrbiting ? 1.0 : 0.88)
-                    .offset(x: discOffset, y: -discOffset)
-                    .opacity(isOrbiting ? 1.0 : 0.0)
-
-                    // Foreground Liquid Glass Album Cover
-                    ArtworkView(key: song.artworkKey, seed: song.album, size: artworkSide, corner: 22)
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                                .strokeBorder(
-                                    LinearGradient(
-                                        colors: [
-                                            Color.white.opacity(colorScheme == .dark ? 0.34 : 0.85),
-                                            Pun.amber.opacity(isOrbiting ? 0.28 : 0.06)
-                                        ],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    ),
-                                    lineWidth: 1.0
-                                )
-                        }
-                        .id(song.id)
-                        .transition(.asymmetric(
-                            insertion: .scale(scale: 0.90).combined(with: .opacity),
-                            removal: .scale(scale: 1.08).combined(with: .opacity)
-                        ))
-                        .shadow(color: .black.opacity(colorScheme == .dark ? 0.30 : 0.08), radius: 4, y: 2)
-                        .shadow(
-                            color: .black.opacity(colorScheme == .dark ? 0.44 : 0.16),
-                            radius: isOrbiting ? 22 : 14,
-                            y: isOrbiting ? 12 : 7
-                        )
-                        .offset(x: coverShift, y: -coverShift)
                 }
-                .animation(.spring(response: 0.50, dampingFraction: 0.76), value: isOrbiting)
-                .animation(.spring(response: 0.35, dampingFraction: 0.80), value: song.id)
+                .animation(.spring(response: 0.46, dampingFraction: 0.78), value: isPlaying)
                 .frame(maxWidth: .infinity)
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(Text("Album artwork"))
@@ -423,7 +501,6 @@ struct NowPlayingView: View {
             Spacer(minLength: 4)
 
             // Anchored bottom section: Title, SeekBar, Transport
-            // Layout priority guarantees this block is given space first so controls NEVER clip off screen.
             VStack(spacing: compact ? 6 : 10) {
                 titleBlock(song)
                 SeekBar(clock: player.clock, song: song) { player.seek(to: $0) }
@@ -464,7 +541,7 @@ struct NowPlayingView: View {
             ZStack {
                 Pun.ink
                 if let tint = ArtworkStore.shared.tint(forKey: player.currentSong?.artworkKey).map({ Color(uiColor: $0) }) {
-                    tint.opacity(colorScheme == .dark ? 0.28 : 0.10)
+                    tint.opacity(colorScheme == .dark ? 0.28 : 0.14)
                 }
                 if let key = player.currentSong?.artworkKey,
                    let image = ArtworkStore.shared.image(forKey: key, maxPixel: 260) {
@@ -474,10 +551,10 @@ struct NowPlayingView: View {
                         .frame(width: max(1, bgWidth), height: max(1, bgHeight))
                         .clipped()
                         .blur(radius: 72)
-                        .opacity(colorScheme == .dark ? 0.32 : 0.12)
+                        .opacity(colorScheme == .dark ? 0.34 : 0.15)
                 }
                 LinearGradient(
-                    colors: [Pun.ink.opacity(0.12), Pun.ink.opacity(colorScheme == .dark ? 0.96 : 0.88)],
+                    colors: [Pun.ink.opacity(0.12), Pun.ink.opacity(colorScheme == .dark ? 0.95 : 0.86)],
                     startPoint: .top,
                     endPoint: .bottom
                 )
@@ -486,11 +563,15 @@ struct NowPlayingView: View {
             .clipped()
         }
         .ignoresSafeArea()
-        .animation(.easeInOut(duration: 0.3), value: player.currentSong?.id)
+        .animation(.easeInOut(duration: 0.35), value: player.currentSong?.id)
     }
 
     private var header: some View {
-        HStack(spacing: 7) {
+        VStack(spacing: 6) {
+            Capsule()
+                .fill(Pun.textDim.opacity(0.28))
+                .frame(width: 36, height: 4)
+            HStack(spacing: 7) {
             Button {
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 if let onClose { onClose() } else { dismiss() }
@@ -526,8 +607,9 @@ struct NowPlayingView: View {
                         .truncationMode(.middle)
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.leading, 3)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.leading, 3)
+            }
         }
         .frame(maxWidth: .infinity)
     }
@@ -544,23 +626,14 @@ struct NowPlayingView: View {
                     .multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .fixedSize(horizontal: false, vertical: true)
-                    .id("title-\(song.id)")
-                    .transition(.asymmetric(
-                        insertion: .opacity.combined(with: .offset(y: 4)),
-                        removal: .opacity.combined(with: .offset(y: -4))
-                    ))
                 Text(song.artist)
-                    .font(Pun.body(.medium))
+                    .font(Pun.body(.semibold))
                     .foregroundStyle(Pun.mango)
                     .lineLimit(1)
                     .truncationMode(.tail)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .id("artist-\(song.id)")
-                    .transition(.asymmetric(
-                        insertion: .opacity.combined(with: .offset(y: 4)),
-                        removal: .opacity.combined(with: .offset(y: -4))
-                    ))
             }
+            .offset(x: cardSlideOffset * 0.55)
             .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityElement(children: .combine)
 
@@ -575,7 +648,6 @@ struct NowPlayingView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .animation(.easeInOut(duration: 0.22), value: song.id)
     }
 
     private var transport: some View {
@@ -586,6 +658,7 @@ struct NowPlayingView: View {
                     prevScale = 0.82
                 }
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                triggerTrackSwitchAnimation(direction: -1.0)
                 player.previous()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
                     withAnimation(.spring(response: 0.22, dampingFraction: 0.65)) {
@@ -610,7 +683,7 @@ struct NowPlayingView: View {
             OrbitPlayPauseButton(isActive: player.isActive, isBuffering: player.isBuffering, size: 70) {
                 player.togglePlayPause()
             }
-            .shadow(color: Pun.amber.opacity(0.16), radius: 13, y: 4)
+            .shadow(color: Pun.amber.opacity(0.18), radius: 13, y: 4)
 
             Spacer(minLength: 24)
 
@@ -620,6 +693,7 @@ struct NowPlayingView: View {
                     nextScale = 0.82
                 }
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                triggerTrackSwitchAnimation(direction: 1.0)
                 player.next()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
                     withAnimation(.spring(response: 0.22, dampingFraction: 0.65)) {
@@ -642,7 +716,6 @@ struct NowPlayingView: View {
         .frame(maxWidth: 340)
         .frame(maxWidth: .infinity)
     }
-
 }
 
 private struct TrackActionsSheet: View {
@@ -722,7 +795,7 @@ private struct TrackActionsSheet: View {
             .frame(maxWidth: 560)
             .frame(maxWidth: .infinity)
         }
-        .background(Pun.surface.ignoresSafeArea())
+        .background(Pun.ink.ignoresSafeArea())
     }
 
     private var repeatTitle: LocalizedStringKey {
@@ -757,13 +830,14 @@ private struct TrackActionsSheet: View {
             .padding(.vertical, 12)
             .padding(.horizontal, 6)
             .background(
-                isActive ? Pun.amber : Pun.surfaceRaised,
+                isActive ? Pun.amber : Pun.surface,
                 in: RoundedRectangle(cornerRadius: 16, style: .continuous)
             )
             .overlay {
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .strokeBorder(Color.white.opacity(isActive ? 0.30 : 0.10), lineWidth: 0.75)
+                    .strokeBorder(isActive ? Color.white.opacity(0.35) : Pun.separator.opacity(0.65), lineWidth: 0.85)
             }
+            .shadow(color: Color.black.opacity(isActive ? 0.14 : 0.05), radius: 6, y: 3)
         }
         .buttonStyle(.plain)
     }
@@ -788,11 +862,7 @@ private struct TrackActionsSheet: View {
         trailing: String? = "chevron.right"
     ) -> some View {
         HStack(spacing: 12) {
-            Image(systemName: symbol)
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(Pun.mango)
-                .frame(width: 40, height: 40)
-                .background(Pun.mango.opacity(0.14), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            PunIconBadge(symbol: symbol, size: 40, corner: 12, fontSize: 16)
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
                     .font(Pun.body(.semibold))

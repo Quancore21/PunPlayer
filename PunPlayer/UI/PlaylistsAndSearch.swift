@@ -88,11 +88,7 @@ struct PlaylistsView: View {
 
     private func row(symbol: String, title: String, detail: String?, titleIsLocalizedKey: Bool = true) -> some View {
         HStack(spacing: 12) {
-            Image(systemName: symbol)
-                .font(.system(size: 17, weight: .semibold))
-                .frame(width: 34, height: 34)
-                .foregroundStyle(Pun.mango)
-                .background(Pun.mango.opacity(0.12), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+            PunIconBadge(symbol: symbol, size: 36, corner: 11, fontSize: 16)
             VStack(alignment: .leading, spacing: 2) {
                 Group {
                     if titleIsLocalizedKey { Text(LocalizedStringKey(title)) }

@@ -1,7 +1,7 @@
 //
 //  PunPlayer -- UI/PunPunCompanionView.swift
-//  60 FPS rhythm-reactive PunPun mascot with pure Row-1 pose consistency.
-//  Tap interaction is disabled so the mascot remains purely music-reactive.
+//  60 FPS rhythm-reactive PunPun mascot with smooth wake/sleep damping
+//  and seamless continuity across track changes.
 //  PunPlayer is licensed under GPLv3.
 //
 
@@ -17,7 +17,7 @@ enum WaveformRhythmAnalyzer {
 
     static func analyze(waveform: [Float], position: TimeInterval, duration: TimeInterval) -> Profile {
         guard !waveform.isEmpty, duration > 0, position.isFinite else {
-            return Profile(energy: 0.40, flux: 0.12, groove: 0.42)
+            return Profile(energy: 0.38, flux: 0.12, groove: 0.40)
         }
         let count = waveform.count
         let ratio = min(max(position / duration, 0.0), 0.9999)
@@ -60,19 +60,25 @@ private final class DanceClock {
     var lastSyncWallTime: TimeInterval = 0
     var beatPhase: Double = 0
     var smoothedGroove: Double = 0.38
+    /// Smooth wakefulness envelope: 0.0 = fast asleep, 1.0 = fully awake and dancing.
+    var wakeLevel: Double = 0.0
 
     func step(
         now: TimeInterval,
+        isActiveSong: Bool,
         isPlaying: Bool,
         clockPos: TimeInterval,
         duration: TimeInterval,
         waveform: [Float]
-    ) -> (phase: Double, groove: Double) {
+    ) -> (phase: Double, groove: Double, wake: Double) {
         if abs(clockPos - lastClockPos) > 0.001 {
             lastClockPos = clockPos
             lastSyncWallTime = now
         }
-        if lastWallTime == 0 { lastWallTime = now }
+        if lastWallTime == 0 {
+            lastWallTime = now
+            wakeLevel = (isActiveSong && isPlaying) ? 1.0 : 0.0
+        }
         let dt = min(max(now - lastWallTime, 0.0), 0.08)
         lastWallTime = now
 
@@ -80,23 +86,27 @@ private final class DanceClock {
         let livePos = isPlaying ? min(max(0.0, clockPos + elapsed), max(0.0, duration)) : clockPos
         let profile = WaveformRhythmAnalyzer.analyze(waveform: waveform, position: livePos, duration: duration)
 
-        let target = isPlaying ? profile.groove : 0.0
-        let rate = (target > smoothedGroove) ? 5.0 : 2.8
-        smoothedGroove += (target - smoothedGroove) * min(1.0, dt * rate)
+        let targetWake = (isActiveSong && isPlaying) ? 1.0 : 0.0
+        let wakeRate = (targetWake > wakeLevel) ? 3.8 : 2.6
+        wakeLevel += (targetWake - wakeLevel) * min(1.0, dt * wakeRate)
+        wakeLevel = min(1.0, max(0.0, wakeLevel))
 
-        let stepsPerSecond: Double
-        if !isPlaying {
-            stepsPerSecond = 0.85
-        } else if smoothedGroove < 0.28 {
-            stepsPerSecond = 1.15 + (smoothedGroove / 0.28) * 0.45
+        let targetGroove = (isActiveSong && isPlaying) ? profile.groove : (smoothedGroove * 0.4)
+        let grooveRate = (targetGroove > smoothedGroove) ? 5.0 : 2.8
+        smoothedGroove += (targetGroove - smoothedGroove) * min(1.0, dt * grooveRate)
+
+        let danceSpeed: Double
+        if smoothedGroove < 0.28 {
+            danceSpeed = 1.15 + (smoothedGroove / 0.28) * 0.45
         } else {
             let norm = (smoothedGroove - 0.28) / 0.72
-            stepsPerSecond = 1.60 + norm * 1.45
+            danceSpeed = 1.60 + norm * 1.45
         }
 
+        let stepsPerSecond = 0.80 + (danceSpeed - 0.80) * wakeLevel
         beatPhase += dt * stepsPerSecond
         if beatPhase > 100_000 { beatPhase = beatPhase.truncatingRemainder(dividingBy: 1200) }
-        return (beatPhase, smoothedGroove)
+        return (beatPhase, smoothedGroove, wakeLevel)
     }
 }
 
@@ -127,14 +137,15 @@ struct PunPunCompanionView: View {
     var body: some View {
         TimelineView(.animation(minimumInterval: reduceMotion ? 0.25 : 1.0 / 60.0, paused: false)) { timeline in
             let now = timeline.date.timeIntervalSinceReferenceDate
-            let (phase, groove) = driver.step(
+            let (phase, groove, wake) = driver.step(
                 now: now,
+                isActiveSong: song != nil,
                 isPlaying: isPlaying,
                 clockPos: clock.position,
                 duration: clock.duration,
                 waveform: waveform
             )
-            let motion = evaluateMotion(phase: phase, groove: groove)
+            let motion = evaluateMotion(phase: phase, groove: groove, wake: wake)
 
             ZStack(alignment: .bottom) {
                 Ellipse()
@@ -160,7 +171,7 @@ struct PunPunCompanionView: View {
                 waveform = []
                 return
             }
-            waveform = []
+            // Keep previous waveform until the new one is ready so PunPun never resets mid-dance
             let loaded = await WaveformCache.shared.waveform(for: song)
             guard !Task.isCancelled else { return }
             waveform = loaded
@@ -179,36 +190,46 @@ struct PunPunCompanionView: View {
         let shadowWidth: CGFloat
     }
 
-    private func evaluateMotion(phase: Double, groove: Double) -> MotionFrame {
-        guard song != nil, isPlaying else {
-            let breath = sin(phase * .pi)
+    private func evaluateMotion(phase: Double, groove: Double, wake: Double) -> MotionFrame {
+        let smoothWake = wake * wake * (3.0 - 2.0 * wake)
+        let breath = sin(phase * .pi)
+
+        if smoothWake < 0.14 {
             return MotionFrame(
                 frameName: "punpun_sleep",
-                scaleX: reduceMotion ? 1.0 : CGFloat(1.0 + breath * 0.016),
-                scaleY: reduceMotion ? 1.0 : CGFloat(1.0 - breath * 0.018),
+                scaleX: reduceMotion ? 1.0 : CGFloat(1.0 + breath * 0.015),
+                scaleY: reduceMotion ? 1.0 : CGFloat(1.0 - breath * 0.017),
                 tiltDegrees: 0,
                 shiftX: 0,
-                bounceY: 1,
+                bounceY: 1.0,
                 shadowWidth: 0.66
             )
         }
 
         let seq = Self.row1DanceSequence
         let stepIndex = (Int(phase) % seq.count + seq.count) % seq.count
+        let frameName: String
+        if smoothWake < 0.42 {
+            // Gentle intermediate posture as PunPun wakes up or winds down to sleep
+            frameName = "punpun_chill_1"
+        } else {
+            frameName = seq[stepIndex]
+        }
+
         let sub = phase.truncatingRemainder(dividingBy: 1.0)
         let bounceArc = sin(sub * .pi)
         let squashCos = cos(sub * .pi * 2.0)
         let sway = sin(phase * .pi * 0.5)
-        let power = min(1.0, max(0.25, groove))
+        let power = min(1.0, max(0.24, groove)) * smoothWake
 
         return MotionFrame(
-            frameName: seq[stepIndex],
+            frameName: frameName,
             scaleX: reduceMotion ? 1.0 : CGFloat(1.0 + squashCos * 0.024 * power),
             scaleY: reduceMotion ? 1.0 : CGFloat(1.0 - squashCos * 0.028 * power),
             tiltDegrees: reduceMotion ? 0 : sway * (3.0 * power),
             shiftX: reduceMotion ? 0 : CGFloat(sway * (1.8 * power)),
-            bounceY: reduceMotion ? 0 : CGFloat(-bounceArc * (3.8 * power)),
-            shadowWidth: CGFloat(0.62 - bounceArc * 0.09 * power)
+            bounceY: reduceMotion ? 0 : CGFloat((1.0 - smoothWake) * 1.0 - bounceArc * (3.8 * power)),
+            shadowWidth: CGFloat(0.66 - 0.04 * smoothWake - bounceArc * 0.09 * power)
         )
     }
 }

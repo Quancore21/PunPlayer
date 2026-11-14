@@ -2,7 +2,7 @@
 
 ## 0.2 -- Beta
 
-- **Kinetic Orbital Disc Artwork:** when playing, a glossy obsidian disc with an amber planetary core emerges at 45 degrees behind the glass album cover and rotates smoothly, eclipsing back behind the cover on pause
+- **Multi-Layered Glass Prism Artwork & 3D Track Transitions:** refracting glass prism layers unfold in 3D perspective behind the album cover and breathe with the music, paired with directional 3D card transitions on track switch
 - **Liquid Glass Surfaces & Dual-Mode Palette Refinement:** upgraded dark obsidian and warm cream light themes with specular glass rims, dual-layer depth shadows, cover-reactive ambient glow, and live 3-bar equalizer indicators
 - **Magnetic Scrubbing Lens & Keplerian Orbit Button:** added magnetic bar magnification and amber glow while scrubbing the waveform, refined Keplerian orbital velocity on Play/Pause, and grouped Shuffle/Repeat/Lyrics into quick-toggle tiles
 - **Clean Album Tracklist & Pure Rhythm PunPun:** removed redundant cover thumbnails inside the album tracklist drawer and made PunPun purely rhythm-reactive without tap glitches

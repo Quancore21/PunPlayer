@@ -1,6 +1,6 @@
 //
 //  PunPlayer — UI/RootView.swift
-//  Home-first navigation and a unified interactive expanding mini-to-full player.
+//  Home-first navigation and a monolithic interactive sliding full-screen player.
 //  PunPlayer is licensed under GPLv3.
 //
 
@@ -17,7 +17,7 @@ struct RootView: View {
     @State private var showNowPlaying = false
     @State private var isPlayerOverlayActive = false
     @State private var showStorageDialog = false
-    /// Single continuous expansion state: 0.0 = collapsed MiniPlayer, 1.0 = full-screen NowPlayingView.
+    /// Continuous presentation progress: 0.0 = collapsed MiniPlayer, 1.0 = full-screen NowPlayingView.
     @State private var expansion: CGFloat = 0.0
     @State private var dragStartExpansion: CGFloat = 0.0
     @State private var isDraggingPlayer = false
@@ -29,7 +29,10 @@ struct RootView: View {
         showNowPlaying = open
         isDraggingPlayer = false
         didTriggerDragHaptic = false
-        withAnimation(.spring(response: 0.35, dampingFraction: 0.88)) {
+        if !open {
+            isPlayerOverlayActive = false
+        }
+        withAnimation(.spring(response: 0.36, dampingFraction: 0.88)) {
             expansion = open ? 1.0 : 0.0
         }
     }
@@ -39,125 +42,122 @@ struct RootView: View {
         let p: CGFloat = hasSong ? min(1.0, max(0.0, expansion)) : 0.0
         let screenW = max(1.0, metrics.screenSize.width)
         let screenH = max(1.0, metrics.screenSize.height)
-        let miniH: CGFloat = 78
-        let cardW: CGFloat = screenW - 24.0 * (1.0 - p)
-        let cardH: CGFloat = miniH + (screenH - miniH) * p
-        let widthScale: CGFloat = cardW / screenW
-        let bottomInset: CGFloat = (metrics.bottomSafeArea + 5.0) * (1.0 - p)
-        let cardCorner: CGFloat = p >= 0.99 ? 0.0 : (18.0 + 22.0 * sin(p * .pi))
-        let miniOpacity = Double(max(0.0, 1.0 - p * 3.8))
-        let fullOpacity = Double(min(1.0, max(0.0, (p - 0.04) / 0.46)))
+        let bottomInset: CGFloat = metrics.bottomSafeArea + 5.0
+        let miniOpacity = Double(max(0.0, 1.0 - p * 4.2))
+        let fullOpacity: Double = p > 0.001 ? 1.0 : 0.0
+        let sheetOffsetY: CGFloat = (1.0 - p) * screenH
+        let sheetCorner: CGFloat = p >= 0.99 ? 0.0 : 32.0
+        let isFullyExpanded = (showNowPlaying && !isDraggingPlayer && p > 0.98)
 
         ZStack(alignment: .bottom) {
             NavigationStack {
                 HomeView()
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .scaleEffect(1.0 - p * 0.03)
             .allowsHitTesting(p < 0.05)
 
             if !showNowPlaying {
-                if !pausedStores.isEmpty {
-                    storageBanner
-                        .padding(.bottom, hasSong ? (miniH + bottomInset + 6) : 0)
+                VStack(spacing: 0) {
+                    if !pausedStores.isEmpty {
+                        storageBanner
+                    }
+                    if hasSong {
+                        MiniPlayer { showNowPlaying = true }
+                            .padding(.horizontal, 12)
+                            .padding(.top, 6)
+                            .padding(.bottom, bottomInset)
+                            .offset(y: -p * 52.0)
+                            .scaleEffect(1.0 + p * 0.02, anchor: .bottom)
+                            .opacity(miniOpacity)
+                            .allowsHitTesting(p < 0.05)
+                    }
                 }
             }
 
             if hasSong {
                 Color.black
-                    .opacity(Double(p * 0.44))
+                    .opacity(Double(p * 0.50))
                     .ignoresSafeArea()
                     .allowsHitTesting(false)
 
-                ZStack(alignment: .top) {
-                    // Full player content inside the same expanding card (width-matched to cardW so edges never clip)
-                    NowPlayingView(onClose: {
+                // Monolithic Full-Screen Player Sheet (never cropped in the middle)
+                NowPlayingView(onClose: {
                         animatePlayer(open: false)
-                    }, isOverlayActive: $isPlayerOverlayActive)
-                    .frame(width: screenW, height: screenH)
-                    .scaleEffect(widthScale, anchor: .top)
-                    .opacity(fullOpacity)
-                    .allowsHitTesting(p > 0.95)
-                    .accessibilityHidden(p < 0.95)
-
-                    // Compact mini-player pinned to the top of the rising card
-                    if p < 0.95 {
-                        MiniPlayer { showNowPlaying = true }
-                            .frame(width: cardW)
-                            .opacity(miniOpacity)
-                            .allowsHitTesting(p < 0.05)
-                    }
-                }
-                .frame(width: cardW, height: cardH, alignment: .top)
-                .background(Pun.surface)
-                .clipShape(RoundedRectangle(cornerRadius: cardCorner, style: .continuous))
+                    },
+                    isOverlayActive: $isPlayerOverlayActive,
+                    isExpanded: isFullyExpanded
+                )
+                .frame(width: screenW, height: screenH)
+                .clipShape(RoundedRectangle(cornerRadius: sheetCorner, style: .continuous))
                 .overlay {
-                    if p < 0.99 {
-                        RoundedRectangle(cornerRadius: cardCorner, style: .continuous)
+                    if p > 0.01 && p < 0.99 {
+                        RoundedRectangle(cornerRadius: sheetCorner, style: .continuous)
                             .strokeBorder(
                                 LinearGradient(
-                                    colors: [
-                                        Color.white.opacity(0.24 * Double(1.0 - p)),
-                                        Pun.separator.opacity(0.65 * Double(1.0 - p))
-                                    ],
+                                    colors: [Color.white.opacity(0.28), Pun.separator.opacity(0.45)],
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
                                 ),
-                                lineWidth: 0.85
+                                lineWidth: 0.9
                             )
                     }
                 }
-                .shadow(color: Color.black.opacity(0.28 + 0.22 * Double(p)), radius: 14 + 14 * p, y: 4)
-                .padding(.bottom, bottomInset)
-                .simultaneousGesture(
-                    DragGesture(minimumDistance: 8, coordinateSpace: .global)
-                        .onChanged { value in
-                            let dy = value.translation.height
-                            let dx = value.translation.width
-                            if !isDraggingPlayer {
-                                if !showNowPlaying {
-                                    guard dy < -5 && abs(dy) > abs(dx) * 0.75 else { return }
-                                } else {
-                                    // When lyrics or drawer is open, only pull down from top header so scrolling never conflicts
-                                    let maxPullStartY: CGFloat = isPlayerOverlayActive ? (metrics.playerTopPadding + 56) : (screenH * 0.56)
-                                    guard value.startLocation.y < maxPullStartY && dy > 8 && abs(dy) > abs(dx) * 0.85 else { return }
-                                }
-                                isDraggingPlayer = true
-                                dragStartExpansion = expansion
-                            }
-                            let dragSpan = max(260.0, screenH * 0.58)
-                            let delta = -dy / dragSpan
-                            let next = min(1.0, max(0.0, dragStartExpansion + delta))
-                            expansion = next
-                            if !showNowPlaying && next > 0.22 && !didTriggerDragHaptic {
-                                didTriggerDragHaptic = true
-                                UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                            } else if !showNowPlaying && next < 0.14 {
-                                didTriggerDragHaptic = false
-                            }
-                        }
-                        .onEnded { value in
-                            guard isDraggingPlayer else { return }
-                            let dy = value.translation.height
-                            let predictedY = value.predictedEndTranslation.height
-                            if !showNowPlaying {
-                                let shouldOpen = (expansion > 0.22) || (dy < -65) || (predictedY < -150)
-                                animatePlayer(open: shouldOpen)
-                            } else {
-                                let shouldClose = (expansion < 0.78) || (dy > 75) || (predictedY > 170)
-                                animatePlayer(open: !shouldClose)
-                            }
-                        }
-                )
+                .shadow(color: Color.black.opacity(p > 0.01 ? 0.42 : 0.0), radius: 26, y: -6)
+                .offset(y: p > 0.001 ? sheetOffsetY : screenH + 40)
+                .opacity(fullOpacity)
+                .allowsHitTesting(isFullyExpanded)
+                .accessibilityHidden(!isFullyExpanded)
                 .ignoresSafeArea()
                 .zIndex(2)
             }
         }
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 10, coordinateSpace: .global)
+                .onChanged { value in
+                    guard hasSong else { return }
+                    let dy = value.translation.height
+                    let dx = value.translation.width
+                    if !isDraggingPlayer {
+                        if !showNowPlaying {
+                            // Start upward pull only from bottom MiniPlayer zone
+                            guard value.startLocation.y >= screenH - (bottomInset + 82) && dy < -6 && abs(dy) > abs(dx) * 0.75 else { return }
+                        } else {
+                            // Start downward dismiss from header or artwork area (never when lyrics/drawer/sheet is open)
+                            guard !isPlayerOverlayActive else { return }
+                            guard value.startLocation.y < screenH * 0.54 && dy > 8 && abs(dy) > abs(dx) * 0.85 else { return }
+                        }
+                        isDraggingPlayer = true
+                        dragStartExpansion = expansion
+                    }
+                    let dragSpan = max(260.0, screenH * 0.62)
+                    let delta = -dy / dragSpan
+                    let next = min(1.0, max(0.0, dragStartExpansion + delta))
+                    expansion = next
+                    if !showNowPlaying && next > 0.20 && !didTriggerDragHaptic {
+                        didTriggerDragHaptic = true
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    } else if !showNowPlaying && next < 0.12 {
+                        didTriggerDragHaptic = false
+                    }
+                }
+                .onEnded { value in
+                    guard isDraggingPlayer else { return }
+                    let dy = value.translation.height
+                    let predictedY = value.predictedEndTranslation.height
+                    if !showNowPlaying {
+                        let shouldOpen = (expansion > 0.22) || (dy < -65) || (predictedY < -150)
+                        animatePlayer(open: shouldOpen)
+                    } else {
+                        let shouldClose = (expansion < 0.78) || (dy > 75) || (predictedY > 170)
+                        animatePlayer(open: !shouldClose)
+                    }
+                }
+        )
         .ignoresSafeArea(edges: .bottom)
         .onChange(of: showNowPlaying) { isOpen in
             let target: CGFloat = (isOpen && player.currentSong != nil) ? 1.0 : 0.0
             if abs(expansion - target) > 0.001 {
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.88)) {
+                withAnimation(.spring(response: 0.36, dampingFraction: 0.88)) {
                     expansion = target
                 }
             }
@@ -166,6 +166,7 @@ struct RootView: View {
             if isNil {
                 showNowPlaying = false
                 isDraggingPlayer = false
+                isPlayerOverlayActive = false
                 expansion = 0.0
             }
         }
@@ -264,6 +265,7 @@ struct RootView: View {
 private struct HomeView: View {
     @EnvironmentObject private var library: LibraryStore
     @EnvironmentObject private var playlists: PlaylistStore
+    @EnvironmentObject private var stats: StatsStore
     @EnvironmentObject private var settings: SettingsStore
     @EnvironmentObject private var player: PlayerEngine
     @State private var showImporter = false
@@ -294,7 +296,7 @@ private struct HomeView: View {
         }
         .overlay(alignment: .top) {
             LinearGradient(
-                colors: [Pun.ink, Pun.ink.opacity(0.82), Pun.ink.opacity(0)],
+                colors: [Pun.ink, Pun.ink.opacity(0.68), Pun.ink.opacity(0)],
                 startPoint: .top,
                 endPoint: .bottom
             )
@@ -312,13 +314,13 @@ private struct HomeView: View {
             Image(settings.appIcon.markAssetName)
                 .resizable()
                 .scaledToFit()
-                .frame(width: 36, height: 36)
-                .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
-                .shadow(color: Color.black.opacity(0.18), radius: 5, y: 2)
+                .frame(width: 38, height: 38)
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .shadow(color: Color.black.opacity(0.20), radius: 6, y: 2)
                 .accessibilityHidden(true)
             Text("PunPlayer")
-                .font(.largeTitle.weight(.bold))
-                .tracking(-1.2)
+                .font(.system(.largeTitle, design: .rounded).weight(.bold))
+                .tracking(-1.0)
                 .foregroundStyle(Pun.text)
                 .lineLimit(1)
                 .minimumScaleFactor(0.76)
@@ -351,7 +353,8 @@ private struct HomeView: View {
                     symbol: "music.note.list",
                     title: "Library",
                     detail: library.songs.isEmpty ? "Your music will live here" : AppLocalization.format("home.library.count", defaultFormat: "%d tracks in your library", library.songs.count),
-                    prominent: true
+                    prominent: true,
+                    previewSongs: library.songs
                 )
             }
             .buttonStyle(.plain)
@@ -363,7 +366,8 @@ private struct HomeView: View {
                     symbol: "rectangle.stack",
                     title: "Playlists",
                     detail: playlists.playlists.isEmpty ? "Your mixes and smart playlists" : AppLocalization.format("home.playlists.count", defaultFormat: "%d personal playlists", playlists.playlists.count),
-                    prominent: false
+                    prominent: false,
+                    previewSongs: []
                 )
             }
             .buttonStyle(.plain)
@@ -371,7 +375,9 @@ private struct HomeView: View {
     }
 
     private var shortcuts: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        let historySongs = SmartPlaylists.songs(for: .history, library: library.songs, stats: stats.stats, settings: settings.smart)
+        let lastAddedSongs = SmartPlaylists.songs(for: .lastAdded, library: library.songs, stats: stats.stats, settings: settings.smart)
+        return VStack(alignment: .leading, spacing: 12) {
             SectionHeading(title: "Quick picks", detail: "Jump back into your music")
             HStack(spacing: 12) {
                 NavigationLink {
@@ -380,7 +386,8 @@ private struct HomeView: View {
                     ShortcutCard(
                         symbol: "clock.arrow.circlepath",
                         title: "History",
-                        detail: "Recently played"
+                        detail: "Recently played",
+                        previewSongs: historySongs
                     )
                 }
                 .buttonStyle(.plain)
@@ -391,7 +398,8 @@ private struct HomeView: View {
                     ShortcutCard(
                         symbol: "plus.square.on.square",
                         title: "Last added",
-                        detail: settings.smart.lastAddedCutoff.title
+                        detail: settings.smart.lastAddedCutoff.title,
+                        previewSongs: lastAddedSongs
                     )
                 }
                 .buttonStyle(.plain)
@@ -430,12 +438,8 @@ private struct HomeView: View {
 
     private var gestureGuideCard: some View {
         VStack(alignment: .leading, spacing: 11) {
-            HStack(spacing: 9) {
-                Image(systemName: "hand.draw")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(Pun.mango)
-                    .frame(width: 34, height: 34)
-                    .background(Pun.mango.opacity(0.12), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            HStack(spacing: 11) {
+                PunIconBadge(symbol: "hand.draw", size: 36, corner: 11, fontSize: 15)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Player gestures")
                         .font(Pun.body(.semibold))
@@ -509,7 +513,7 @@ private struct HomeView: View {
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(Pun.mango)
                         .frame(width: 34, height: 34)
-                        .background(Pun.surfaceRaised, in: Circle())
+                        .punGlassCard(corner: 17, prominent: false)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Show recently added songs")
@@ -537,11 +541,7 @@ private struct HomeView: View {
 
     private var emptyLibraryCard: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Image(systemName: library.isScanning ? "waveform" : "music.note.house")
-                .font(.system(size: 26, weight: .medium))
-                .foregroundStyle(Pun.mango)
-                .frame(width: 52, height: 52)
-                .background(Pun.mango.opacity(0.12), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            PunIconBadge(symbol: library.isScanning ? "waveform" : "music.note.house", size: 52, corner: 16, fontSize: 24)
             VStack(alignment: .leading, spacing: 5) {
                 Text(LocalizedStringKey(library.isScanning ? "Looking for your music…" : "Start with your own music"))
                     .font(Pun.title(.title3))
@@ -605,14 +605,11 @@ private struct HomeDestinationRow: View {
     let title: String
     let detail: String
     let prominent: Bool
+    var previewSongs: [Song] = []
 
     var body: some View {
         HStack(spacing: 14) {
-            Image(systemName: symbol)
-                .font(.system(size: 20, weight: .semibold))
-                .foregroundStyle(Pun.mango)
-                .frame(width: 48, height: 48)
-                .background(Pun.mango.opacity(0.12), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+            PunIconBadge(symbol: symbol, size: 48, corner: 15, fontSize: 20)
             VStack(alignment: .leading, spacing: 3) {
                 Text(LocalizedStringKey(title))
                     .font(Pun.body(.semibold))
@@ -622,7 +619,11 @@ private struct HomeDestinationRow: View {
                     .foregroundStyle(Pun.textDim)
                     .lineLimit(1)
             }
-            Spacer(minLength: 0)
+            Spacer(minLength: 4)
+            if !previewSongs.isEmpty {
+                ArtworkFanView(songs: previewSongs, size: 34)
+                    .padding(.trailing, 2)
+            }
             Image(systemName: "chevron.right")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(Pun.textDim.opacity(0.8))
@@ -637,14 +638,17 @@ private struct ShortcutCard: View {
     let symbol: String
     let title: String
     let detail: String
+    var previewSongs: [Song] = []
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Image(systemName: symbol)
-                .font(.system(size: 19, weight: .semibold))
-                .foregroundStyle(Pun.mango)
-                .frame(width: 42, height: 42)
-                .background(Pun.mango.opacity(0.12), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .center) {
+                PunIconBadge(symbol: symbol, size: 42, corner: 14, fontSize: 18)
+                Spacer(minLength: 4)
+                if !previewSongs.isEmpty {
+                    ArtworkFanView(songs: previewSongs, size: 28)
+                }
+            }
             VStack(alignment: .leading, spacing: 3) {
                 Text(LocalizedStringKey(title))
                     .font(Pun.body(.semibold))
@@ -655,7 +659,7 @@ private struct ShortcutCard: View {
                     .lineLimit(1)
             }
         }
-        .frame(maxWidth: .infinity, minHeight: 108, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: 110, alignment: .leading)
         .padding(14)
         .punGlassCard(corner: 19, prominent: false)
     }
@@ -744,6 +748,7 @@ struct MiniPlayer: View {
                     .padding(.top, 2)
                     .padding(.bottom, 4)
             }
+            .punGlassCard(corner: 18, prominent: false)
             .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
     }

@@ -272,11 +272,7 @@ struct LibraryView: View {
                 SongCollectionView(title: group.name, songs: group.songs)
             } label: {
                 HStack(spacing: 12) {
-                    Image(systemName: symbol)
-                        .font(.system(size: 18, weight: .semibold))
-                        .frame(width: 48, height: 48)
-                        .foregroundStyle(Pun.mango)
-                        .background(Pun.surfaceRaised, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+                    PunIconBadge(symbol: symbol, size: 48, corner: 13, fontSize: 18)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(group.name)
                             .font(Pun.body(.medium))
